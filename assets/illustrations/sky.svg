@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-label="Three birds rising over a horizon line">
+  <g fill="none" stroke="currentColor" stroke-linecap="round">
+    <line x1="0" y1="232" x2="480" y2="232" stroke-width="1" opacity=".28"/>
+    <line x1="0" y1="258" x2="480" y2="258" stroke-width="1" opacity=".16"/>
+    <line x1="0" y1="280" x2="480" y2="280" stroke-width="1" opacity=".1"/>
+    <g stroke-width="2.4" opacity=".85">
+      <path d="M120 168c14-16 27-16 39 0"/>
+      <path d="M159 168c12-16 25-16 38 0"/>
+    </g>
+    <g stroke-width="2" opacity=".55">
+      <path d="M245 116c10-12 20-12 29 0"/>
+      <path d="M274 116c9-12 19-12 28 0"/>
+    </g>
+    <g stroke-width="1.6" opacity=".35">
+      <path d="M330 68c7-9 15-9 21 0"/>
+      <path d="M351 68c7-9 14-9 21 0"/>
+    </g>
+  </g>
+  <circle cx="404" cy="52" r="2.4" fill="currentColor" opacity=".3"/>
+</svg>

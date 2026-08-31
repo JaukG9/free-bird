@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Free Bird tests and evaluation</title>
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f7f6f2; --ink: #191d1c; --mute: #6b7370; --line: #e3e0d7;
+      --ok: #2f6b4f; --bad: #97402c; --accent: #245f5c;
+      --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2.5rem 1.5rem 5rem;
+      background: var(--bg); color: var(--ink);
+      font-family: var(--font); font-size: 15px; line-height: 1.6;
+    }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin: 0 0 .35rem; letter-spacing: -.02em; }
+    h2 { font-size: 1.05rem; margin: 2.5rem 0 .75rem; letter-spacing: -.01em; }
+    .lede { color: var(--mute); margin: 0 0 1.5rem; max-width: 62ch; }
+    .bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+    button {
+      padding: .5rem .9rem; min-height: 2.4rem;
+      background: #fff; border: 1px solid #cfcbbf; border-radius: 5px;
+      font: inherit; font-size: .875rem; cursor: pointer; color: var(--ink);
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .summary {
+      padding: .85rem 1.1rem; border: 1px solid var(--line); border-radius: 6px;
+      background: #fffefb; margin-bottom: 1.25rem; font-variant-numeric: tabular-nums;
+    }
+    .summary.pass { border-color: var(--ok); color: var(--ok); }
+    .summary.fail { border-color: var(--bad); color: var(--bad); }
+    .suite { margin-bottom: 1.25rem; }
+    .suite h3 { font-size: .9rem; margin: 0 0 .35rem; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: .2rem 0 .2rem 1.6rem; position: relative; font-size: .875rem; }
+    li::before { position: absolute; left: 0; font-weight: 700; font-size: .75rem; }
+    li.pass::before { content: "PASS"; content: "\2713"; color: var(--ok); }
+    li.fail::before { content: "\2717"; color: var(--bad); }
+    li.fail { color: var(--bad); }
+    li .err { display: block; font-family: var(--mono); font-size: .75rem; color: var(--bad); padding-left: .2rem; }
+    pre {
+      background: #fffefb; border: 1px solid var(--line); border-radius: 6px;
+      padding: 1rem; overflow-x: auto; font-family: var(--mono); font-size: .75rem;
+      line-height: 1.55; white-space: pre;
+    }
+    .note { font-size: .8rem; color: var(--mute); max-width: 70ch; }
+    .status { font-size: .85rem; color: var(--mute); margin-bottom: 1rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Free Bird tests and evaluation</h1>
+    <p class="lede">
+      Runs the same source files the application loads. Nothing here is precomputed:
+      every figure below is produced by the run you start.
+    </p>
+
+    <div class="bar">
+      <button id="run-tests" class="primary" type="button">Run tests</button>
+      <button id="run-eval" type="button">Run evaluation (rule engine)</button>
+      <button id="load-model" type="button">Load on-device model</button>
+      <button id="run-eval-blended" type="button" disabled>Run evaluation (blended)</button>
+      <button id="copy" type="button" disabled>Copy report</button>
+      <a href="../index.html" style="align-self:center;margin-left:.5rem;font-size:.85rem;">Back to the app</a>
+    </div>
+
+    <p class="status" id="status">Ready.</p>
+    <div id="summary"></div>
+    <div id="results"></div>
+    <div id="report"></div>
+
+    <h2>Notes</h2>
+    <p class="note">
+      Blended evaluation needs the on-device model, which is roughly 25 MB and is
+      downloaded from a public CDN. The rule-engine evaluation needs no download
+      and is the mode the Node runner measures with
+      <code>node tests/run-node.js --eval</code>.
+    </p>
+    <p class="note">
+      The dataset in <code>data/evaluation-data.js</code> was written and labelled by
+      the project author. It is a development set for catching regressions, not an
+      independent benchmark.
+    </p>
+  </div>
+
+  <script src="../ai/normalize.js"></script>
+  <script src="../data/exercises.js"></script>
+  <script src="../ai/classifier.js"></script>
+  <script src="../ai/safety.js"></script>
+  <script src="../ai/model.js"></script>
+  <script src="../ai/recommendations.js"></script>
+  <script src="../ai/fallback.js"></script>
+  <script src="../ai/pipeline.js"></script>
+  <script src="../data/evaluation-data.js"></script>
+  <script src="test-harness.js"></script>
+  <script src="classifier-tests.js"></script>
+  <script src="safety-tests.js"></script>
+  <script src="recommendation-tests.js"></script>
+  <script src="evaluate.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var FB = window.FB;
+      var statusNode = document.getElementById('status');
+      var summaryNode = document.getElementById('summary');
+      var resultsNode = document.getElementById('results');
+      var reportNode = document.getElementById('report');
+      var copyBtn = document.getElementById('copy');
+      var lastReportText = '';
+
+      function setStatus(text) { statusNode.textContent = text; }
+
+      function clearOutput() {
+        summaryNode.innerHTML = '';
+        resultsNode.innerHTML = '';
+        reportNode.innerHTML = '';
+        copyBtn.disabled = true;
+      }
+
+      document.getElementById('run-tests').addEventListener('click', function () {
+        clearOutput();
+        setStatus('Running tests...');
+
+        var groups = {};
+        FB.testHarness.run(function (result) {
+          if (!groups[result.suite]) {
+            var section = document.createElement('section');
+            section.className = 'suite';
+            var heading = document.createElement('h3');
+            heading.textContent = result.suite;
+            var list = document.createElement('ul');
+            section.appendChild(heading);
+            section.appendChild(list);
+            resultsNode.appendChild(section);
+            groups[result.suite] = list;
+          }
+          var item = document.createElement('li');
+          item.className = result.passed ? 'pass' : 'fail';
+          item.textContent = result.label;
+          if (!result.passed) {
+            var err = document.createElement('span');
+            err.className = 'err';
+            err.textContent = result.error;
+            item.appendChild(err);
+          }
+          groups[result.suite].appendChild(item);
+        }).then(function (summary) {
+          var box = document.createElement('div');
+          box.className = 'summary ' + (summary.failed ? 'fail' : 'pass');
+          box.textContent = summary.passed + ' passed, ' + summary.failed + ' failed, ' + summary.total + ' total';
+          summaryNode.appendChild(box);
+          setStatus(summary.failed ? 'Finished with failures.' : 'All tests passed.');
+        });
+      });
+
+      function runEvaluation(mode) {
+        clearOutput();
+        setStatus('Evaluating in ' + mode + ' mode...');
+
+        FB.evaluate.run({
+          mode: mode,
+          onProgress: function (done, total) { setStatus('Evaluating ' + done + ' of ' + total + '...'); }
+        }).then(function (report) {
+          lastReportText = FB.evaluate.format(report);
+          var pre = document.createElement('pre');
+          pre.textContent = lastReportText;
+          reportNode.appendChild(pre);
+          copyBtn.disabled = false;
+          setStatus('Evaluation finished.');
+        }).catch(function (err) {
+          setStatus('Evaluation failed: ' + err.message);
+        });
+      }
+
+      document.getElementById('run-eval').addEventListener('click', function () { runEvaluation('rules'); });
+      document.getElementById('run-eval-blended').addEventListener('click', function () { runEvaluation('blended'); });
+
+      document.getElementById('load-model').addEventListener('click', function () {
+        setStatus('Loading the on-device model...');
+        FB.model.on(function (state) {
+          if (state.status === 'loading') setStatus('Loading the on-device model, ' + state.progress + '%');
+        });
+        FB.model.load().then(function (state) {
+          if (FB.model.semanticReady()) {
+            document.getElementById('run-eval-blended').disabled = false;
+            setStatus('Model ready (' + state.modelId + '). Blended evaluation is now available.');
+          } else {
+            setStatus('The model could not load: ' + (state.error || 'unknown reason') + '. Rule-engine evaluation still works.');
+          }
+        });
+      });
+
+      copyBtn.addEventListener('click', function () {
+        if (!lastReportText) return;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(lastReportText).then(function () { setStatus('Report copied.'); });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

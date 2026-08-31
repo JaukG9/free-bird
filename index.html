@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Free Bird</title>
+  <meta name="description" content="Free Bird turns a real stressful situation into a personalised Calm, Clarify, Act plan using private, on-device AI. Built for students. No account, no backend.">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f7f6f2">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div id="app" class="app">
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="brand" href="#/home" aria-label="Free Bird, home">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <path d="M3 20.5c4.4.9 8.1-.4 11.2-3.9 2.3-2.6 4.4-4.2 6.4-4.8 2.2-.7 4.3-.2 6.3 1.4-1.5 6.1-5.6 9.5-12.2 10.2"/>
+              <path d="M9.6 24.3c1.7 2.1 3.9 3.1 6.6 3" opacity=".45"/>
+              <circle cx="24.4" cy="11.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </span>
+          <span class="brand__name">Free Bird</span>
+        </a>
+
+        <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav">
+          <span class="nav-toggle__bars" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="nav-toggle__text">Menu</span>
+        </button>
+
+        <nav id="nav" class="nav" aria-label="Main">
+          <ul id="nav-list" class="nav__list"></ul>
+        </nav>
+
+        <div id="model-status" class="site-header__status"></div>
+      </div>
+    </header>
+
+    <div id="notice-host" hidden></div>
+    <div id="demo-bar" class="demo-bar" hidden></div>
+
+    <main id="main" class="main" tabindex="-1">
+      <div id="view" class="view-host">
+        <!-- Rendered before JavaScript runs, and replaced by the router.
+             This keeps the page readable if scripts are blocked entirely. -->
+        <noscript>
+          <section class="panel">
+            <h1>Free Bird</h1>
+            <p>Free Bird needs JavaScript, because all of its analysis runs in your browser rather than on a server. Turning JavaScript on for this page keeps your writing on your device.</p>
+            <p><strong>If you need support right now:</strong> call or text 988 in the United States, or call your local emergency number if you are in immediate danger.</p>
+          </section>
+        </noscript>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <p class="site-footer__brand">Free Bird <span aria-hidden="true">·</span> <span class="site-footer__tagline">Fly free, fly high.</span></p>
+        <p class="site-footer__note">
+          Not a therapist, a diagnosis, or an emergency service. In the United States, call or text 988 for the Suicide and Crisis Lifeline.
+        </p>
+        <p class="site-footer__meta">
+          <a href="#/safety">Safety and about</a>
+          <span aria-hidden="true">·</span>
+          <a href="#/progress">Your data</a>
+          <span aria-hidden="true">·</span>
+          <span>&copy; <span id="year">2026</span></span>
+        </p>
+      </div>
+    </footer>
+  </div>
+
+  <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast-host" class="toast-host"></div>
+
+  <!-- Plain classic scripts, loaded in dependency order. No bundler, no
+       modules, so index.html also opens directly from the filesystem. -->
+  <script src="js/storage.js"></script>
+  <script src="ai/normalize.js"></script>
+  <script src="data/exercises.js"></script>
+  <script src="ai/classifier.js"></script>
+  <script src="ai/safety.js"></script>
+  <script src="ai/model.js"></script>
+  <script src="ai/recommendations.js"></script>
+  <script src="ai/fallback.js"></script>
+  <script src="ai/pipeline.js"></script>
+  <script src="data/demo-data.js"></script>
+  <script src="js/dom.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/wingman-context.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/views/home.js"></script>
+  <script src="js/views/stress-test.js"></script>
+  <script src="js/views/snapshot.js"></script>
+  <script src="js/views/plan.js"></script>
+  <script src="js/views/wingman.js"></script>
+  <script src="js/views/progress.js"></script>
+  <script src="js/views/about.js"></script>
+  <script src="js/views/safety-support.js"></script>
+  <script src="js/demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
