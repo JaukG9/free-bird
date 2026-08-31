@@ -70,13 +70,21 @@
       listNode.scrollTop = listNode.scrollHeight;
     }
 
+    // The transcript is the one part of this screen that redraws on its own.
+    // A full route re-render would throw away whatever is half-typed in the
+    // box, so the view subscribes to chat changes and repaints only the list.
+    // Whoever added the message is irrelevant: the user, the demo script, or
+    // another browser tab all land here.
+    FB.router.onCleanup(FB.state.subscribe(function (unused, reason) {
+      if (reason === 'chat' || reason === 'external') paint();
+    }));
+
     function submit(preset) {
       var text = (preset !== undefined ? preset : input.value).trim();
       if (!text || busy) return;
 
       FB.state.addChatMessage({ role: 'user', text: text, at: Date.now() });
       input.value = '';
-      paint();
 
       busy = true;
       sendBtn.disabled = true;
@@ -106,7 +114,6 @@
               intent: reply.intent,
               confidence: reply.confidence
             });
-            paint();
             busy = false;
             sendBtn.disabled = false;
             FB.dom.announce('Wingman replied.');
@@ -122,7 +129,6 @@
             at: Date.now(),
             method: 'error'
           });
-          paint();
         });
     }
 

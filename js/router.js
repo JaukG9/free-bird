@@ -51,6 +51,10 @@
     if (window.location.hash === hash) {
       render();
     } else {
+      // A hashchange render is already on its way. Suppress any queued render
+      // until it lands, so the screen being navigated away from is not redrawn
+      // against the new state on the way out.
+      awaitNavigation();
       window.location.hash = hash;
     }
   }
@@ -69,10 +73,78 @@
   function afterEach(fn) { afterHooks.push(fn); }
 
   var outlet = null;
+  var cleanups = [];
+  var renderQueued = false;
+  var navigationPending = false;
+
+  /**
+   * Hold off scheduled renders until a hashchange render arrives. The timeout
+   * is a safety net: if the navigation somehow produces no event, the app
+   * recovers rather than never painting again.
+   */
+  function awaitNavigation() {
+    navigationPending = true;
+    renderQueued = false;
+    window.setTimeout(function () {
+      if (!navigationPending) return;
+      navigationPending = false;
+      render();
+    }, 80);
+  }
+
+  /**
+   * Register a teardown for the view currently being rendered.
+   *
+   * Views are plain functions that build a DOM tree, so anything a view
+   * subscribes to would otherwise outlive it and keep firing against nodes
+   * that are no longer on the page. A view calls this during render, and the
+   * router runs the teardown immediately before the next render.
+   */
+  function onCleanup(fn) {
+    if (typeof fn === 'function') cleanups.push(fn);
+    return fn;
+  }
+
+  function runCleanups() {
+    var pending = cleanups;
+    cleanups = [];
+    pending.forEach(function (fn) {
+      try { fn(); } catch (e) { /* a failing teardown must not block the render */ }
+    });
+  }
+
+  /**
+   * Ask for a render without doing one per state change.
+   *
+   * A single user action often produces several notifications in a row: a
+   * stress check clears demo mode, starts a session, and navigates. Rendering
+   * on each one is wasted work and, worse, briefly paints a screen against
+   * half-applied state. Coalescing to the end of the current task means every
+   * view is drawn once, from the finished state.
+   */
+  function scheduleRender() {
+    if (renderQueued || navigationPending) return;
+    renderQueued = true;
+    var run = function () {
+      renderQueued = false;
+      render();
+    };
+    if (typeof Promise !== 'undefined' && Promise.resolve) {
+      Promise.resolve().then(run);
+    } else {
+      window.setTimeout(run, 0);
+    }
+  }
 
   function render() {
     if (!outlet) outlet = document.getElementById('view');
     if (!outlet) return;
+
+    // Anything queued is about to happen anyway; do not draw the same screen
+    // twice because a synchronous render overtook a scheduled one.
+    renderQueued = false;
+    navigationPending = false;
+    runCleanups();
 
     var target = parseHash();
 
@@ -138,6 +210,8 @@
     replace: replace,
     start: start,
     render: render,
+    scheduleRender: scheduleRender,
+    onCleanup: onCleanup,
     beforeEach: beforeEach,
     afterEach: afterEach,
     parseHash: parseHash,

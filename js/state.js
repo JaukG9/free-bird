@@ -187,6 +187,7 @@
       state.session.completedAt = Date.now();
     }
     persistSession();
+    refreshHistoryEntry();
     notify('plan');
   }
 
@@ -197,6 +198,7 @@
     });
     state.session.completedAt = null;
     persistSession();
+    refreshHistoryEntry();
     notify('plan');
   }
 
@@ -211,6 +213,7 @@
     });
     state.session.completedAt = null;
     persistSession();
+    refreshHistoryEntry();
     notify('plan');
   }
 
@@ -221,7 +224,50 @@
     state.session.checkin = null;
     state.session.completedAt = null;
     persistSession();
+    refreshHistoryEntry();
     notify('plan');
+  }
+
+  /**
+   * Swap in a freshly analysed profile while keeping the progress the user has
+   * already made: which steps are done, the exercise log, the check-in, and
+   * the conversation. Used when the demo re-runs the same text through the
+   * on-device model, where losing the walkthrough's place would be worse than
+   * the stale analysis it replaces.
+   *
+   * This exists so that re-analysis goes through one action that persists and
+   * notifies, rather than being assembled by mutating the store from outside.
+   */
+  function replaceSession(profile, options) {
+    options = options || {};
+    var previous = state.session;
+    var previousChat = state.chat;
+
+    startSession(profile, { demo: options.demo !== undefined ? options.demo : (previous && previous.demo) });
+
+    var next = state.session;
+    if (previous && options.carryProgress !== false) {
+      (previous.plan.steps || []).forEach(function (oldStep) {
+        next.plan.steps.forEach(function (newStep) {
+          if (newStep.stage === oldStep.stage && oldStep.done) {
+            newStep.done = true;
+            if (oldStep.doneAt) newStep.doneAt = oldStep.doneAt;
+          }
+        });
+      });
+      next.exerciseLog = previous.exerciseLog || [];
+      next.checkin = previous.checkin || null;
+      next.completedAt = previous.completedAt || null;
+    }
+    if (options.carryChat !== false) {
+      state.chat = previousChat;
+    }
+
+    persistSession();
+    persistChat();
+    refreshHistoryEntry();
+    notify('session');
+    return next;
   }
 
   function clearSession() {
@@ -290,13 +336,13 @@
    * History stores a compact summary only. It never stores the raw stressor
    * text, so clearing a session does not leave the written reflection behind.
    */
-  function addHistoryFromSession() {
-    if (!hasSession() || !state.session.checkin) return;
+  function historyEntryFromSession() {
+    if (!hasSession() || !state.session.checkin) return null;
     var session = state.session;
     var lastExercise = session.exerciseLog[session.exerciseLog.length - 1];
     var exercise = lastExercise ? FB.exercises.get(lastExercise.exerciseId) : null;
 
-    var entry = {
+    return {
       id: session.profile.id,
       demo: !!session.demo,
       createdAt: session.checkin.at,
@@ -312,10 +358,74 @@
       exercisesCompleted: session.exerciseLog.length,
       source: session.profile.source
     };
+  }
 
+  function addHistoryFromSession() {
+    var entry = historyEntryFromSession();
+    if (!entry) return;
     var history = state.history.filter(function (h) { return h.id !== entry.id; });
     history.push(entry);
     state.history = FB.storage.setHistory(history);
+  }
+
+  /**
+   * Keep an already-recorded history entry in step with the live plan.
+   *
+   * Without this, completing a fourth exercise or swapping a step after the
+   * check-in leaves Progress showing figures that no longer match My Plan.
+   * Does nothing until the session has actually been recorded, because an
+   * un-checked-in session belongs in the live panel, not in the timeline.
+   */
+  function refreshHistoryEntry() {
+    if (!hasSession() || !state.session.checkin) return;
+    var id = state.session.profile.id;
+    var exists = state.history.some(function (h) { return h.id === id; });
+    if (!exists) return;
+    addHistoryFromSession();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Live session summary                                                */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * A compact read of the session that is happening right now, in the same
+   * shape Progress uses for recorded entries. Progress calls this so a stress
+   * check shows up there immediately rather than only after a check-in.
+   * Returns null when there is nothing in flight, or when this session has
+   * already been written to history and so appears in the timeline instead.
+   */
+  function liveSnapshot() {
+    if (!hasSession()) return null;
+    var session = state.session;
+    var profile = session.profile;
+    var id = profile.id;
+
+    if (state.history.some(function (h) { return h.id === id; })) return null;
+
+    var steps = (session.plan && session.plan.steps) || [];
+    var doneSteps = steps.filter(function (step) { return step.done; });
+    var next = steps.filter(function (step) { return !step.done; })[0] || null;
+    var nextExercise = next ? FB.exercises.get(next.exerciseId) : null;
+
+    return {
+      id: id,
+      demo: !!session.demo,
+      createdAt: profile.createdAt,
+      subject: profile.subject || null,
+      headline: session.plan ? session.plan.headline : null,
+      primarySignal: profile.primarySignal,
+      drivers: FB.recommendations.driversFor(profile).map(function (d) { return d.label; }),
+      pressureBefore: profile.pressure ? profile.pressure.value : null,
+      pressureBand: profile.pressure ? profile.pressure.band : null,
+      stepsDone: doneSteps.length,
+      stepsTotal: steps.length,
+      exercisesCompleted: session.exerciseLog ? session.exerciseLog.length : 0,
+      nextStepLabel: next ? next.label : null,
+      nextExerciseTitle: nextExercise ? nextExercise.title : null,
+      awaitingCheckin: steps.length > 0 && doneSteps.length === steps.length && !session.checkin,
+      source: profile.source
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -384,6 +494,80 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Cross-tab synchronisation                                           */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Adopt a write made by another tab of Free Bird.
+   *
+   * Two tabs used to drift apart silently: finishing a plan in one left the
+   * other showing a stale plan until it was reloaded, and both then wrote over
+   * each other. The `storage` event fires only in the *other* document, so
+   * this is never triggered by our own writes and cannot loop.
+   *
+   * `slice` is 'prefs', 'session', 'history', 'chat', or null when the whole
+   * store was cleared. Everything held only in memory (the embedding, model
+   * state, demo position, an unsaved conversation) is deliberately left alone:
+   * it belongs to this tab.
+   */
+  function adoptExternalChange(slice) {
+    if (slice === null || slice === undefined) {
+      state.prefs = FB.storage.getPrefs();
+      state.session = FB.storage.getSession() || null;
+      state.history = FB.storage.getHistory();
+      if (!state.prefs.saveChat) state.chat = { messages: [], turn: 0 };
+      applyMotionPreference();
+      notify('external');
+      return;
+    }
+
+    if (slice === 'prefs') {
+      state.prefs = FB.storage.getPrefs();
+      applyMotionPreference();
+      notify('external');
+      return;
+    }
+
+    if (slice === 'session') {
+      var stored = FB.storage.getSession();
+      // A session written elsewhere has no embedding, and it does not need
+      // one: the vector is only used during analysis, which has finished.
+      state.session = (stored && stored.profile) ? stored : null;
+      notify('external');
+      return;
+    }
+
+    if (slice === 'history') {
+      state.history = FB.storage.getHistory();
+      notify('external');
+      return;
+    }
+
+    if (slice === 'chat') {
+      // Only adopt a conversation the user asked to have saved. When saving is
+      // off, this tab's conversation is its own and stays in memory.
+      if (!state.prefs.saveChat) return;
+      var chat = FB.storage.getChat();
+      state.chat = Array.isArray(chat)
+        ? { messages: chat, turn: chat.filter(function (m) { return m.role === 'user'; }).length }
+        : { messages: [], turn: 0 };
+      notify('external');
+    }
+  }
+
+  /** Start listening for other tabs. Called once, from the app bootstrap. */
+  function watchOtherTabs() {
+    if (!FB.storage.onExternalChange) return function () {};
+    return FB.storage.onExternalChange(function (slice) {
+      try {
+        adoptExternalChange(slice);
+      } catch (err) {
+        if (window.console && console.error) console.error('Cross-tab sync failed:', err);
+      }
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Model state mirror                                                  */
   /* ------------------------------------------------------------------ */
 
@@ -401,8 +585,12 @@
     setPref: setPref,
     applyMotionPreference: applyMotionPreference,
     startSession: startSession,
+    replaceSession: replaceSession,
     hasSession: hasSession,
     clearSession: clearSession,
+    liveSnapshot: liveSnapshot,
+    adoptExternalChange: adoptExternalChange,
+    watchOtherTabs: watchOtherTabs,
     setSafetyBlock: setSafetyBlock,
     clearSafetyBlock: clearSafetyBlock,
     completeStep: completeStep,

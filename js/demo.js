@@ -148,22 +148,11 @@
           intent: reply.intent,
           confidence: reply.confidence
         });
-        repaintWingman();
         window.setTimeout(function () { sendAt(index + 1); }, gap);
       });
-      repaintWingman();
     }
 
     sendAt(alreadySent);
-  }
-
-  /**
-   * The Wingman view paints from state but is not re-rendered on chat changes,
-   * so the demo asks the router to redraw it after each scripted exchange.
-   */
-  function repaintWingman() {
-    var route = FB.router.currentRoute();
-    if (route && route.name === 'wingman') FB.router.render();
   }
 
   function runCheckin() {
@@ -193,20 +182,11 @@
       FB.components.toast('Re-running the same text with the on-device model.');
       return FB.pipeline.analyze(scenario.text, scenario.context).then(function (profile) {
         if (profile.blocked) return;
-        var previous = FB.state.get().session;
-        var previousChat = FB.state.get().chat;
-        FB.state.startSession(profile, { demo: true });
-        // Carry over what has already been demonstrated so the walkthrough
-        // does not lose its place.
-        var restored = FB.state.get().session;
-        FB.state.get().chat = previousChat;
-        previous.plan.steps.forEach(function (oldStep, index) {
-          if (oldStep.done) restored.plan.steps[index].done = true;
-        });
-        restored.exerciseLog = previous.exerciseLog;
-        restored.checkin = previous.checkin;
+        // replaceSession carries over the steps already demonstrated, the
+        // exercise log, the check-in and the conversation, and persists and
+        // notifies once, so every screen picks up the new analysis together.
+        FB.state.replaceSession(profile, { demo: true });
         FB.state.setDemo({ usedLiveAi: true });
-        FB.router.render();
         FB.dom.announce('Re-analysed with the on-device model.');
       });
     }
