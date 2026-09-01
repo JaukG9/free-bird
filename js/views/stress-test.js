@@ -42,6 +42,17 @@
 
   var draft = { text: '', topic: '', timeframe: '', pressure: 3 };
 
+  function emptyDraft() {
+    return { text: '', topic: '', timeframe: '', pressure: 3 };
+  }
+
+  // The half-typed entry survives navigating away and back, which is the point
+  // of holding it here. It must not survive the user deleting their data, so
+  // that one reason drops it.
+  FB.state.subscribe(function (unused, reason) {
+    if (reason === 'cleared') draft = emptyDraft();
+  });
+
   function render(params) {
     var busy = false;
 
@@ -153,7 +164,7 @@
               FB.router.go('safety-support');
               return;
             }
-            draft = { text: '', topic: '', timeframe: '', pressure: 3 };
+            draft = emptyDraft();
             FB.state.setDemo({ active: false, stepIndex: -1 });
             FB.state.startSession(profile);
             FB.dom.announce('Analysis ready. Pressure estimate ' + profile.pressure.value + ' out of 10.');

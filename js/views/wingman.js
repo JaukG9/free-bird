@@ -70,13 +70,21 @@
       listNode.scrollTop = listNode.scrollHeight;
     }
 
+    // The transcript is the one part of this screen that redraws on its own.
+    // A full route re-render would throw away whatever is half-typed in the
+    // box, so the view subscribes to chat changes and repaints only the list.
+    // Whoever added the message is irrelevant: the user, the demo script, or
+    // another browser tab all land here.
+    FB.router.onCleanup(FB.state.subscribe(function (unused, reason) {
+      if (reason === 'chat' || reason === 'external') paint();
+    }));
+
     function submit(preset) {
       var text = (preset !== undefined ? preset : input.value).trim();
       if (!text || busy) return;
 
       FB.state.addChatMessage({ role: 'user', text: text, at: Date.now() });
       input.value = '';
-      paint();
 
       busy = true;
       sendBtn.disabled = true;
@@ -84,8 +92,14 @@
       listNode.scrollTop = listNode.scrollHeight;
 
       var turn = FB.state.get().chat.turn;
+      // What Wingman has already said this conversation. The composer uses it
+      // to avoid handing back a reply the user is still looking at.
+      var recent = FB.state.get().chat.messages
+        .filter(function (m) { return m.role === 'wingman'; })
+        .slice(-4)
+        .map(function (m) { return m.text; });
 
-      FB.pipeline.respond(text, FB.wingmanContext.build(), turn)
+      FB.pipeline.respond(text, FB.wingmanContext.build(), turn, { recent: recent })
         .then(function (reply) {
           if (reply.blocked) {
             FB.state.setSafetyBlock(reply.safety);
@@ -106,7 +120,6 @@
               intent: reply.intent,
               confidence: reply.confidence
             });
-            paint();
             busy = false;
             sendBtn.disabled = false;
             FB.dom.announce('Wingman replied.');
@@ -122,7 +135,6 @@
             at: Date.now(),
             method: 'error'
           });
-          paint();
         });
     }
 
@@ -138,10 +150,12 @@
       ])
     ]);
 
+    // Chosen for where this session actually is, so someone who has finished
+    // the plan is not offered "help me break this down" again.
     var suggestions = el('div', { class: 'chat__suggestions' }, [
       el('p', { class: 'chat__suggestions-label', id: 'suggestion-label', text: 'Or start with one of these' }),
       el('ul', { class: 'chat__suggestion-list', 'aria-labelledby': 'suggestion-label' },
-        FB.fallback.SUGGESTED_PROMPTS.map(function (prompt) {
+        FB.fallback.suggestionsFor(ctx).map(function (prompt) {
           return el('li', {}, el('button', {
             class: 'suggestion', type: 'button',
             onclick: function () { submit(prompt); }

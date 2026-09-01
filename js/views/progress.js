@@ -13,8 +13,12 @@
   function render() {
     var state = FB.state.get();
     var history = state.history.slice().sort(function (a, b) { return a.createdAt - b.createdAt; });
+    // The session that is open right now, before any check-in has been
+    // recorded. Without this, running a stress check and doing the exercises
+    // left this page insisting nothing had happened.
+    var live = FB.state.liveSnapshot();
 
-    if (!history.length) {
+    if (!history.length && !live) {
       return el('div', { class: 'view view--progress' }, [
         FB.components.sectionHeading('Progress', 'Nothing recorded yet', 'A check-in after a plan is what fills this page. Nothing is recorded automatically.'),
         FB.components.emptyState(
@@ -32,9 +36,18 @@
       ]);
     }
 
+    if (!history.length) {
+      return el('div', { class: 'view view--progress' }, [
+        FB.components.sectionHeading('Progress', 'One in progress', 'This page fills up once you record a check-in. Here is where the current one has got to.'),
+        livePanel(live),
+        dataControls(history)
+      ]);
+    }
+
     return el('div', { class: 'view view--progress' }, [
       FB.components.sectionHeading('Progress', 'What you have recorded', 'All of this is your own reporting, stored in this browser. None of it is a clinical measure.'),
-      summaryRow(history),
+      live ? livePanel(live) : null,
+      summaryRow(history, live),
       chartPanel(history),
       categoryPanel(history),
       timelinePanel(history),
@@ -42,10 +55,65 @@
     ]);
   }
 
-  function summaryRow(history) {
+  /**
+   * The stress check that is open right now.
+   *
+   * It is shown separately from the timeline, and labelled as not recorded,
+   * because nothing goes into history until the user chooses to check in. This
+   * page should still tell the truth about what is happening in the meantime.
+   */
+  function livePanel(live) {
+    var pct = live.stepsTotal ? (live.stepsDone / live.stepsTotal) * 100 : 0;
+
+    var status;
+    if (live.awaitingCheckin) {
+      status = 'All ' + live.stepsTotal + ' steps are done. The check-in is what puts this on the chart below.';
+    } else if (live.nextExerciseTitle) {
+      status = 'Next up is your ' + String(live.nextStepLabel).toLowerCase() + ' step: ' + live.nextExerciseTitle + '.';
+    } else {
+      status = 'The plan is ready whenever you are.';
+    }
+
+    return el('section', { class: 'panel panel--live' }, [
+      el('div', { class: 'live-head' }, [
+        el('div', {}, [
+          el('p', { class: 'eyebrow', text: 'Happening now · started ' + FB.dom.formatDate(live.createdAt) }),
+          el('h3', { class: 'panel__title', text: live.headline || live.subject || labelFor(live.primarySignal) })
+        ]),
+        el('span', { class: 'tag tag--live', text: live.demo ? 'Demo, not recorded yet' : 'Not recorded yet' })
+      ]),
+
+      el('dl', { class: 'summary-row summary-row--tight' }, [
+        summaryItem('Pressure at the start', live.pressureBefore === null ? 'Not estimated' : live.pressureBefore + '/10'),
+        summaryItem('Plan progress', live.stepsDone + ' of ' + live.stepsTotal + ' steps'),
+        summaryItem('Exercises done', String(live.exercisesCompleted)),
+        summaryItem('Main driver', (live.drivers && live.drivers[0]) || labelFor(live.primarySignal))
+      ]),
+
+      el('div', { class: 'plan-progress' }, [
+        el('span', { class: 'plan-progress__label', text: status }),
+        el('div', { class: 'plan-progress__track', 'aria-hidden': 'true' }, [
+          el('span', { class: 'plan-progress__fill', style: 'width:' + pct + '%' })
+        ])
+      ]),
+
+      el('div', { class: 'row' }, [
+        el('a', { class: 'btn btn--primary btn--small', href: '#/plan' },
+          live.awaitingCheckin ? 'Record the check-in' : 'Open the plan'),
+        el('a', { class: 'btn btn--text btn--small', href: '#/snapshot' }, 'See the snapshot')
+      ]),
+
+      el('p', { class: 'meta', text: 'Nothing here has been written to your history yet. Free Bird only records a check-in you choose to save.' })
+    ]);
+  }
+
+  function summaryRow(history, live) {
     var withChange = history.filter(function (h) { return typeof h.pressureBefore === 'number' && typeof h.pressureAfter === 'number'; });
     var improved = withChange.filter(function (h) { return h.pressureAfter < h.pressureBefore; }).length;
     var exercises = history.reduce(function (sum, h) { return sum + (h.exercisesCompleted || 1); }, 0);
+    // Exercises done in the open session count as done. They are real work,
+    // and leaving them out is what made this page lag behind My Plan.
+    var liveExercises = live ? live.exercisesCompleted : 0;
 
     var avgDelta = withChange.length
       ? (withChange.reduce(function (sum, h) { return sum + (h.pressureBefore - h.pressureAfter); }, 0) / withChange.length)
@@ -53,7 +121,8 @@
 
     return el('dl', { class: 'summary-row' }, [
       summaryItem('Check-ins', String(history.length)),
-      summaryItem('Exercises completed', String(exercises)),
+      summaryItem('Exercises completed', String(exercises + liveExercises),
+        liveExercises ? liveExercises + ' of them in the session still open' : null),
       summaryItem('Reported lower after', improved + ' of ' + withChange.length),
       summaryItem('Average reported change', avgDelta === 0
         ? 'No change'
@@ -61,10 +130,11 @@
     ]);
   }
 
-  function summaryItem(label, value) {
+  function summaryItem(label, value, note) {
     return el('div', { class: 'summary-item' }, [
       el('dt', { text: label }),
-      el('dd', { text: value })
+      el('dd', { text: value }),
+      note ? el('p', { class: 'summary-item__note', text: note }) : null
     ]);
   }
 
