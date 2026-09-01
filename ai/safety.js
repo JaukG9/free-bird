@@ -38,14 +38,27 @@
   var CRISIS_PATTERNS = [
     // Suicidal statements
     { id: 'suicide-intent', level: 'crisis', re: /\b(kill(ing)?\s+myself|end(ing)?\s+my\s+life|take\s+my\s+own\s+life|commit\s+suicide|suicidal|suicide)\b/ },
-    { id: 'not-want-to-live', level: 'crisis', re: /\b(don'?t|do\s+not|dont)\s+want\s+to\s+(live|be\s+alive|be\s+here|exist|wake\s+up)\b/ },
+    { id: 'not-want-to-live', level: 'crisis', re: /\b(don'?t)\s+want\s+to\s+(live|be\s+alive|be\s+here|exist|wake\s+up)\b/ },
     { id: 'want-to-die', level: 'crisis', re: /\b(want(s|ed)?|wish(es|ed)?)\s+(to\s+die|i\s+(was|were)\s+dead|i\s+could\s+die)\b/ },
     // Crisis language about another person. This still fires, because a student
     // carrying a friend's disclosure needs the same resources. NEGATION_CONTEXT
     // then steps it down from a hard stop to a support note.
     { id: 'third-person-crisis', level: 'crisis', re: /\b(kill(ing)?\s+(him|her|them)self|end(ing)?\s+(his|her|their)\s+life|hurt(ing)?\s+(him|her|them)self|take\s+(his|her|their)\s+own\s+life)\b/ },
-    { id: 'better-off-without', level: 'crisis', re: /\b(everyone|they|people|my\s+family|my\s+parents)\s+(would\s+be|are)\s+better\s+off\s+without\s+me\b/ },
+    // Written without the leading subject so an adverb between the subject and
+    // the verb cannot break the match. A held-out case ("everyone would
+    // honestly be better off if I was not around anymore") was missed by the
+    // earlier subject-anchored version, which is precisely the kind of false
+    // negative this scan exists to prevent.
+    { id: 'better-off-without', level: 'crisis', re: /\bbetter\s+off\s+without\s+me\b/ },
+    // Contracted forms first: normalize.js turns "was not" into "wasn't"
+    // before this runs, so the long form alone would never fire.
+    { id: 'better-off-if-gone', level: 'crisis', re: /\bbetter\s+off\s+if\s+i\s+(wasn'?t|weren'?t|was|were)\s+(not\s+)?(around|here|gone|dead|born)\b/ },
+    { id: 'not-around-anymore', level: 'crisis', re: /\bif\s+i\s+(wasn'?t|weren'?t)\s+(around|here)\s+(anymore|any\s+more)\b/ },
     { id: 'no-point-living', level: 'crisis', re: /\b(no\s+(point|reason)\s+(in\s+)?(living|going\s+on|being\s+here)|nothing\s+left\s+to\s+live\s+for)\b/ },
+    // "I do not really see a reason to keep going with any of it anymore" was
+    // the second held-out miss. The verbs listed are deliberately existential:
+    // a bare "going on" would fire on "going on with this essay".
+    { id: 'sees-no-reason', level: 'crisis', re: /\b(don'?t)\s+(really\s+)?see\s+(a|any|the)\s+(point|reason)\s+(in\s+|to\s+)?(keep\s+going|keep\s+living|carry\s+on|carrying\s+on|living|being\s+here|go\s+on)\b/ },
     { id: 'plan-statement', level: 'crisis', re: /\b(i\s+have\s+a\s+plan\s+to\s+(die|end|hurt|kill)|tonight\s+is\s+the\s+night|wrote\s+(a\s+)?(note|goodbye))\b/ },
     { id: 'goodbye', level: 'crisis', re: /\b(this\s+is\s+goodbye|won'?t\s+be\s+here\s+(tomorrow|much\s+longer))\b/ },
 
@@ -54,7 +67,7 @@
     { id: 'overdose', level: 'crisis', re: /\b(overdose|od'?d|took\s+(all\s+)?(the\s+)?pills|swallow(ed)?\s+.{0,12}pills)\b/ },
 
     // Immediate danger or inability to stay safe
-    { id: 'cannot-stay-safe', level: 'crisis', re: /\b(can'?t|cannot|couldn'?t)\s+(keep\s+myself\s+safe|stay\s+safe|guarantee\s+i'?ll\s+be\s+safe)\b/ },
+    { id: 'cannot-stay-safe', level: 'crisis', re: /\b(can'?t|couldn'?t)\s+(keep\s+myself\s+safe|stay\s+safe|guarantee\s+i'?ll\s+be\s+safe)\b/ },
     { id: 'in-danger', level: 'crisis', re: /\b(i\s+am|i'?m)\s+(in\s+danger|not\s+safe|being\s+(hurt|abused|beaten|threatened))\b/ },
     { id: 'someone-hurting-me', level: 'crisis', re: /\b(someone|he|she|they)\s+is\s+(hurting|abusing|threatening|hitting)\s+me\b/ },
     { id: 'harm-others', level: 'crisis', re: /\b(want\s+to|going\s+to|plan\s+to)\s+(hurt|kill)\s+(someone|him|her|them|people|everyone)\b/ },

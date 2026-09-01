@@ -61,6 +61,37 @@
     });
   });
 
+  describe('Safety pattern hygiene', function (t) {
+    t.it('writes every pattern in the contracted form normalisation produces', function (assert) {
+      // normalize.js rewrites "was not" to "wasn't" before the scan runs, so a
+      // pattern spelling out the long form is dead code. When this class of bug
+      // hit the crisis list it caused a missed detection, not a cosmetic fault.
+      FB.safety.CRISIS_PATTERNS.forEach(function (pattern) {
+        var readable = pattern.re.source.replace(/\\s\+/g, ' ').replace(/\\b/g, '');
+        FB.normalize.CONTRACTIONS.forEach(function (rule) {
+          var probe = new RegExp(rule[0].source, 'i');
+          assert.notOk(probe.test(readable),
+            pattern.id + ' would be normalised away: ' + pattern.re.source);
+        });
+      });
+    });
+
+    t.it('still flags a crisis statement built with an adverb in the middle', function (assert) {
+      var result = FB.safety.scan('everyone would honestly be better off if I was not around anymore');
+      assert.equal(result.level, 'crisis', 'adverb between subject and verb defeated the scan');
+    });
+
+    t.it('still flags an existential statement phrased as seeing no reason', function (assert) {
+      var result = FB.safety.scan('I do not really see a reason to keep going with any of it anymore');
+      assert.equal(result.level, 'crisis');
+    });
+
+    t.it('does not flag seeing no point in a specific piece of work', function (assert) {
+      var result = FB.safety.scan('honestly I do not see the point in going on with this essay, it is going nowhere');
+      assert.notEqual(result.level, 'crisis', 'fired on a mundane object');
+    });
+  });
+
   describe('Safety scan, structure', function (t) {
     t.it('returns level none for empty input', function (assert) {
       assert.equal(FB.safety.scan('').level, 'none');

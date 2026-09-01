@@ -3,8 +3,11 @@
   "configurations": [
     {
       "name": "free-bird",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["--yes", "http-server", "-p", "4173", "-c-1", "--silent"],
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        ".claude/devserver.py",
+        "4173"
+      ],
       "port": 4173
     }
   ]

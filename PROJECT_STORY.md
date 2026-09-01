@@ -12,6 +12,8 @@ Nothing the student writes is ever sent anywhere. There is no backend, no API ke
 
 The idea started with a specific, unglamorous observation: the moment a student most needs help is the moment they are least able to ask for it.
 
+The scale turned out to be larger than I assumed. In the CDC's 2023 Youth Risk Behavior Survey, 40% of US high school students reported persistent feelings of sadness or hopelessness, up from 30% a decade earlier. That is not a clinical population. That is most of a hallway.
+
 Exams stack up. Applications have hard dates. A friendship goes quiet and you cannot work out why. And the work that would actually fix any of it is precisely the work that feels impossible to begin. What you need at 11pm on a Tuesday is not a diagnosis and not a lecture. It is one small, specific thing you could plausibly do next.
 
 I looked at what already exists and found that everything fell into two groups, and both missed:
@@ -19,7 +21,9 @@ I looked at what already exists and found that everything fell into two groups, 
 - **Generic wellness apps** hand you the same breathing exercise whether you are avoiding an essay or worried about a friend. They never engage with the actual situation. The advice is not wrong, it is just not *about* you, and a student can tell within about ten seconds.
 - **General-purpose chatbots** will absolutely engage with the situation, but they send some of the most personal text a teenager will ever write to a server they know nothing about. They have no structure, they drift into territory they are not competent in, and nobody tells you what happened to what you typed.
 
-That second point is the one that stuck with me. Mental-health-adjacent writing is genuinely sensitive, and most products treat sending it to a third-party API as free. It is not free. It is the whole cost.
+That second point is the one that stuck with me, and it is measurable rather than a hunch. A 2022 review of 578 mental health apps found 44% shared user data with third parties, and Mozilla's *Privacy Not Included* assessment flagged 28 of the 32 mental health apps it reviewed. For the single most sensitive category of text a teenager writes, that is the industry baseline.
+
+Mental-health-adjacent writing is genuinely sensitive, and most products treat sending it to a third-party API as free. It is not free. It is the whole cost.
 
 So the constraint came before the feature list: **whatever this is, the student's writing never leaves their device.** Every other decision in the project fell out of that one.
 
@@ -113,19 +117,20 @@ Before any reply goes out it is checked for at least one reference to the studen
 
 There is a custom test harness that runs both in the browser and under Node's `vm`, loading the application source exactly as the browser loads it. There is also an evaluation runner over an author-written labelled dataset.
 
-The measured results, re-runnable and hardcoded nowhere:
+There are two labelled sets, kept deliberately apart. The **development set** was written alongside the classifier, so it can only tell me whether a change broke something. The **held-out set** was written after the classifier was finished and never used to tune it, so it is the one that estimates real behaviour.
 
-| Metric | Rule engine | Blended with on-device model |
+| Metric | Development set | Held-out set |
 | --- | --- | --- |
-| Primary signal accuracy | 86.0% | 86.0% |
-| Macro F1 | 88.4% | 88.5% |
-| Secondary signal recall | 41.0% | **48.7%** |
-| Pressure band, exact | 60.5% | **74.4%** |
-| Pressure band, within one | 100.0% | 100.0% |
+| Primary signal accuracy | 88.4% (38/43) | 82.5% (33/40) |
+| Macro F1 | 90.3% | 82.5% |
+| Secondary signal recall | 41.0% | 19.2% |
+| Pressure band, exact | 65.1% | 42.5% |
+| Pressure band, within one | 100.0% | 97.5% |
 | Safety accuracy | 100.0% (48/48) | 100.0% (48/48) |
-| Mean analysis latency | 0.5 ms | 30.7 ms |
 
-I want to be honest about the first row, because it is the interesting one: **the embedding model does not improve top-1 accuracy at all.** On clear cases, the hand-built lexicon already gets there. The model earns its place on the nuanced parts, secondary signals and pressure calibration, which are the outputs that actually shape the plan. That is a less flattering result than "AI made it better" and it is the true one.
+Building that second set was the most useful thing I did on this project, and it is covered properly in the challenges section below, because the first run of it failed badly.
+
+I also want to be honest about the on-device model: **it does not improve top-1 accuracy at all.** On clear cases the hand-built lexicon already gets there. The model earns its place on secondary signals and pressure calibration, which are the outputs that actually shape the plan. That is a less flattering result than "AI made it better" and it is the true one.
 
 ---
 
@@ -141,6 +146,16 @@ I want to be honest about the first row, because it is the interesting one: **th
 
 **Progress lying about progress.** The Progress page only filled in after a check-in was recorded. So you could run a stress check, complete all three exercises, open Progress, and be told nothing had happened. Technically correct, since nothing had been *recorded*. Completely wrong as an experience. It now shows the session in flight, clearly labelled as not yet recorded, and moves it into the timeline when you check in.
 
+**The held-out set failed, and it was the best thing that happened to the project.** I had been quoting 86% accuracy for weeks. Then I wrote 48 fresh cases after the classifier was finished, deliberately messier and more lowercase than the development set, and ran them.
+
+It scored **27.5%**.
+
+Not a scoring bug. Coverage. Scores are `total / (total + 4)`, so clearing the reporting floor needs at least one solid keyword match, and my fresh phrasings frequently matched nothing at all and fell through to "low stress". The system had learned my writing habits, not the problem. Worse, **two crisis phrasings were missed entirely**, and both were the same bug: the normaliser contracts "was not" to "wasn't" before the safety scan runs, so any pattern written in the long form was dead code that could never match. That had caused a missed crisis detection, which is the most serious failure this project can have.
+
+Fixing it properly meant resisting the obvious shortcut. I could have pasted the failing sentences into the lexicon and watched the number go green; my first attempt at the patch did exactly that, and I threw it away, because memorising the test set fixes the score without fixing the product. What went in instead were *constructions*: sentence shapes students reach for generally. Held-out accuracy went from 27.5% to 82.5%, and the development set improved too, from 86.0% to 88.4%, which is the signature of a genuine recall fix rather than memorisation.
+
+The uncomfortable part is that the held-out set is now burned. I looked at it while fixing the thing it exposed, so 82.5% is optimistic by an unknown amount. I report it that way, because a burned held-out number is still far more informative than a development-set number, and pretending otherwise would repeat the exact mistake the set was built to catch.
+
 **Knowing where to stop.** The hardest calls were about what *not* to build. Not a mood tracker. Not streaks. Not a diagnosis. Not a chatbot that will discuss anything. Free Bird says it is not a therapist, not a diagnosis, and not an emergency service, in the footer, on the form, and in Wingman's own replies. Every exercise names the practice family it comes from and none of them claim to be clinically proven. There is a test that fails the build if any user-facing string makes a clinical claim.
 
 ---
@@ -151,7 +166,9 @@ I want to be honest about the first row, because it is the interesting one: **th
 
 **The honest test for an AI feature is whether a lookup table would do the same job.** Applying that test rigorously meant *removing* AI in two places, safety and reply generation, and keeping it in two places, signal recall and intent matching, where the recall genuinely could not be hand-written. Being able to say exactly where the model earns its keep is more valuable than being able to say "powered by AI."
 
-**Measuring your own system will embarrass you, and you should publish it anyway.** The evaluation told me the model does not improve top-1 accuracy. It would have been easy to report only the metrics that improved. Reporting the flat one, and explaining structurally *why* secondary recall is capped by an interface decision, made the whole set of numbers mean something.
+**Measuring your own system will embarrass you, and you should publish it anyway.** The evaluation told me the model does not improve top-1 accuracy, and the held-out set told me my headline figure had been inflated by 58 points. Both were unpleasant and both were worth more than any feature I shipped. A number you cannot interrogate is decoration.
+
+**A test set you wrote while building is not a test set.** It is a regression check, and it is valuable as one, but it cannot tell you how the system behaves on wording it has never seen. I now think the single highest-leverage hour on a project like this is the one spent writing evaluation cases *after* you stop coding, in a different mood, deliberately messier than feels fair.
 
 **Accessibility rewrites your components, not your CSS.** Real radio inputs under the chip styling. `aria-describedby` wired to the field so a screen reader hears the error at the right moment. Focus traps verified over twelve tab presses. Two "Clear" buttons on one page needing distinct accessible names. None of that is a stylesheet change, and all of it was cheaper to do while building than to retrofit.
 
@@ -161,7 +178,8 @@ I want to be honest about the first row, because it is the interesting one: **th
 
 ## What's next
 
-- Widen the evaluation set, and get it labelled by someone who did not write the classifier. The current figures are a regression check, not an independent benchmark, and the README says so.
+- **A second held-out set, written by someone who has not seen the current lexicon.** The existing one is burned and its 82.5% should be treated as an upper bound.
+- **Independent labels.** `tests/label.html` presents either dataset with no labels visible and reports Cohen's kappa against the stored answers. Running it with two or three other people would convert the biggest remaining caveat into a number.
 - More languages. The lexicon and safety patterns are English-only today, which is a real limitation rather than a nice-to-have.
 - An export path so a student can take a summary to a counsellor if they choose to, without that ever being automatic.
 - Optional on-device summarisation, still local, still gated behind an explicit choice, still labelled honestly.

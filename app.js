@@ -22,6 +22,7 @@
     FB.router.register('plan', FB.views.plan);
     FB.router.register('wingman', FB.views.wingman);
     FB.router.register('progress', FB.views.progress);
+    FB.router.register('how-it-works', FB.views.howItWorks);
     FB.router.register('safety', FB.views.about);
     FB.router.register('safety-support', FB.views.safetySupport);
     FB.router.register('not-found', {
@@ -70,6 +71,7 @@
     { route: 'plan', label: 'My plan' },
     { route: 'wingman', label: 'Wingman' },
     { route: 'progress', label: 'Progress' },
+    { route: 'how-it-works', label: 'How it works' },
     { route: 'safety', label: 'Safety and about' }
   ];
 

@@ -297,6 +297,22 @@
     return el('section', { class: 'panel panel--quiet' }, [
       el('h3', { class: 'panel__title', text: 'Your data' }),
       el('p', { text: 'All of this lives in this browser under keys starting with ' + FB.storage.PREFIX + '. Free Bird stores summaries, never the text you wrote.' }),
+      el('p', { class: 'meta', text: 'Because there is no account, moving to another browser or device is something you do yourself with a file. Nothing is uploaded at any point.' }),
+      el('div', { class: 'row' }, [
+        el('button', {
+          class: 'btn btn--secondary btn--small', type: 'button',
+          onclick: function () {
+            try {
+              var bytes = FB.dataTransfer.exportToFile();
+              FB.components.toast('Exported ' + Math.max(1, Math.round(bytes / 1024)) + ' KB to your downloads.');
+              FB.dom.announce('Your data has been exported to a file.');
+            } catch (err) {
+              FB.components.toast('The export could not be created.');
+            }
+          }
+        }, 'Export my data'),
+        importControl()
+      ]),
       el('div', { class: 'row' }, [
         demoCount
           ? el('button', {
@@ -325,6 +341,60 @@
           }
         }, 'Clear my data')
       ])
+    ]);
+  }
+
+  /**
+   * Import is a file input styled as a button, so it needs no permissions and
+   * no drag target. The confirmation step is deliberate: an import can replace
+   * real history, so it states what it found before it changes anything.
+   */
+  function importControl() {
+    var input = el('input', {
+      type: 'file',
+      accept: 'application/json,.json',
+      id: 'import-file',
+      class: 'sr-only',
+      onchange: function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+
+        FB.dataTransfer.readFile(file).then(function (data) {
+          var check = FB.dataTransfer.validate(data);
+          if (!check.ok) {
+            FB.components.toast(check.message);
+            input.value = '';
+            return;
+          }
+
+          FB.components.confirmDialog({
+            title: 'Import this file?',
+            body: 'It contains ' + FB.dataTransfer.summarise(data) + ', exported ' +
+              (data.exportedAt ? new Date(data.exportedAt).toLocaleDateString() : 'at an unknown date') +
+              '. Check-ins you do not already have will be added. Nothing you have now is deleted.',
+            detail: 'Preferences in the file will replace your current ones.',
+            confirmLabel: 'Import',
+            onConfirm: function () {
+              try {
+                var result = FB.dataTransfer.applyImport(data, 'merge');
+                FB.components.toast('Imported. ' + result.history + ' check-in' + (result.history === 1 ? '' : 's') + ' read from the file.');
+                FB.dom.announce('Import finished.');
+              } catch (err) {
+                FB.components.toast('The import failed, and nothing was changed.');
+              }
+              input.value = '';
+            }
+          });
+        }).catch(function (err) {
+          FB.components.toast(err.message || 'That file could not be read.');
+          input.value = '';
+        });
+      }
+    });
+
+    return el('span', { class: 'filebtn' }, [
+      input,
+      el('label', { class: 'btn btn--secondary btn--small', for: 'import-file' }, 'Import a file')
     ]);
   }
 

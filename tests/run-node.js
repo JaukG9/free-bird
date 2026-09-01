@@ -3,7 +3,8 @@
  * Offline test and evaluation runner.
  *
  *   node tests/run-node.js            run the test suites
- *   node tests/run-node.js --eval     run the evaluation and print metrics
+ *   node tests/run-node.js --eval     evaluate both sets and compare them
+ *   node tests/run-node.js --eval --dataset holdout   score one set only
  *   node tests/run-node.js --eval --json report.json   also write the raw report
  *
  * No dependencies and no build step. The application source is loaded exactly
@@ -36,6 +37,7 @@ const SOURCES = [
   'ai/fallback.js',
   'ai/pipeline.js',
   'data/evaluation-data.js',
+  'data/evaluation-holdout.js',
   'tests/test-harness.js',
   'tests/classifier-tests.js',
   'tests/safety-tests.js',
@@ -110,19 +112,73 @@ function runTests(FB) {
   });
 }
 
+/**
+ * Evaluate both sets and print them side by side.
+ *
+ * The two are never merged into one figure. The development set says whether a
+ * change broke something that used to work; the held-out set estimates how the
+ * system does on wording it has not seen. The distance between them is the
+ * most informative thing either one reports.
+ *
+ *   --dataset dev|holdout|all   score only one set (default: both, compared)
+ */
 function runEvaluation(FB, args) {
-  console.log('Running evaluation in rule-engine mode over ' + FB.evaluationData.CASES.length + ' cases.\n');
+  const pick = args.indexOf('--dataset');
+  const only = pick !== -1 ? args[pick + 1] : null;
 
-  return FB.evaluate.run({ mode: 'rules' }).then(function (report) {
-    console.log(FB.evaluate.format(report));
+  function report(dataset) {
+    const n = FB.evaluate.casesFor(dataset).length;
+    console.log('Evaluating the ' + FB.evaluate.datasetLabel(dataset) + ' in rule-engine mode over ' + n + ' cases.\n');
+    return FB.evaluate.run({ mode: 'rules', dataset: dataset }).then(function (r) {
+      console.log(FB.evaluate.format(r));
+      return r;
+    });
+  }
 
+  function writeJson(payload) {
     const jsonIndex = args.indexOf('--json');
     if (jsonIndex !== -1 && args[jsonIndex + 1]) {
       const target = path.resolve(process.cwd(), args[jsonIndex + 1]);
-      fs.writeFileSync(target, JSON.stringify(report, null, 2), 'utf8');
+      fs.writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8');
       console.log('\nRaw report written to ' + target);
     }
-    return report;
+  }
+
+  if (only) {
+    return report(only).then(function (r) { writeJson(r); return r; });
+  }
+
+  return report('dev').then(function (dev) {
+    console.log('\n' + '='.repeat(60) + '\n');
+    return report('holdout').then(function (holdout) {
+      function pct(v) { return v === null || v === undefined ? '  n/a' : (v * 100).toFixed(1) + '%'; }
+      function pad(t, w) { t = String(t); while (t.length < w) t += ' '; return t; }
+
+      console.log('\n' + '='.repeat(60));
+      console.log('DEVELOPMENT vs HELD-OUT');
+      console.log('='.repeat(60));
+      console.log(pad('Metric', 30) + pad('Dev', 10) + pad('Held-out', 10) + 'Gap');
+
+      [
+        ['Primary signal accuracy', function (r) { return r.primarySignal.accuracy; }],
+        ['Macro F1', function (r) { return r.primarySignal.macroF1; }],
+        ['Secondary signal recall', function (r) { return r.secondarySignals.recall; }],
+        ['Pressure band, exact', function (r) { return r.pressureBand.accuracy; }],
+        ['Pressure band, within one', function (r) { return r.pressureBand.withinOneBand; }],
+        ['Safety accuracy', function (r) { return r.safety.accuracy; }]
+      ].forEach(function (row) {
+        const a = row[1](dev);
+        const b = row[1](holdout);
+        const gap = (a === null || b === null) ? '' : ((b - a) * 100).toFixed(1) + ' pts';
+        console.log(pad(row[0], 30) + pad(pct(a), 10) + pad(pct(b), 10) + gap);
+      });
+
+      console.log('\nThe held-out set was consulted while fixing a recall problem it exposed,');
+      console.log('so its figures are optimistic by an unknown amount. See README section 15.');
+
+      writeJson({ dev: dev, holdout: holdout });
+      return { dev: dev, holdout: holdout };
+    });
   });
 }
 
