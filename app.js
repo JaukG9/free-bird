@@ -200,11 +200,18 @@
   /* ------------------------------------------------------------------ */
 
   /**
-   * Reasons that change what a view shows. Chat and model updates are handled
-   * locally by the views that care, so a Wingman message does not wipe the
-   * text someone is in the middle of typing.
+   * Reasons that change what a view shows.
+   *
+   * Every one of these redraws the whole view, so a change made anywhere shows
+   * up everywhere at once: a completed step updates Home, My Plan and Progress
+   * in the same frame rather than whenever each screen is next visited.
+   *
+   * 'chat' is deliberately absent. A Wingman reply must not wipe the message
+   * someone is in the middle of typing, so the Wingman view subscribes to it
+   * directly and repaints only the transcript. 'external' is a write made by
+   * another browser tab.
    */
-  var RERENDER_REASONS = ['session', 'plan', 'checkin', 'cleared', 'restore', 'history', 'demo'];
+  var RERENDER_REASONS = ['session', 'plan', 'checkin', 'cleared', 'restore', 'history', 'demo', 'external'];
 
   function subscribeToState() {
     FB.state.subscribe(function (state, reason) {
@@ -212,11 +219,13 @@
         paintModelChip();
         return;
       }
-      if (reason === 'prefs') {
+      if (reason === 'prefs' || reason === 'external') {
         paintFirstRunNotice();
         paintModelChip();
+      }
+      if (reason === 'prefs') {
         var route = FB.router.currentRoute();
-        if (route && route.name === 'safety') FB.router.render();
+        if (route && route.name === 'safety') FB.router.scheduleRender();
         return;
       }
       if (reason === 'safety') {
@@ -225,7 +234,10 @@
       }
       if (RERENDER_REASONS.indexOf(reason) !== -1) {
         if (reason === 'cleared') paintFirstRunNotice();
-        FB.router.render();
+        // Scheduled rather than immediate, so one user action that fires
+        // several notifications still results in exactly one paint of the
+        // finished state.
+        FB.router.scheduleRender();
       }
     });
   }
@@ -315,6 +327,8 @@
     buildNav();
     setupMobileNav();
     subscribeToState();
+    // Keeps a second tab of Free Bird from drifting out of step with this one.
+    FB.state.watchOtherTabs();
     paintModelChip();
     paintFirstRunNotice();
     FB.demo.init();

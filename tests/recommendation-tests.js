@@ -276,4 +276,224 @@
       assert.ok(opening.indexOf('stress check') !== -1);
     });
   });
+
+  /* ------------------------------------------------------------------ */
+  /* Wingman message reading and intent coverage                         */
+  /* ------------------------------------------------------------------ */
+
+  describe('Wingman message reading', function (t) {
+    t.it('pulls the task out of the wording', function (assert) {
+      assert.equal(FB.fallback.readMessage('I have not started my chem final yet').task, 'chem final');
+      assert.equal(FB.fallback.readMessage('the group project is a mess').task, 'group project');
+      assert.equal(FB.fallback.readMessage('I have three tests next week').task, 'three tests');
+    });
+
+    t.it('pulls out who the message is about, ready to say back', function (assert) {
+      var read = FB.fallback.readMessage('my mom keeps asking about it');
+      assert.equal(read.personRaw, 'my mom');
+      // Echoed in the second person, so the reply does not say "my mom".
+      assert.equal(read.person, 'your mom');
+      assert.equal(FB.fallback.readMessage('nothing about anyone in particular').person, null);
+    });
+
+    t.it('pulls out when it is happening', function (assert) {
+      assert.equal(FB.fallback.readMessage('it is due tomorrow').when, 'tomorrow');
+      assert.ok(FB.fallback.readMessage('I have to hand it in on friday').when !== null);
+    });
+
+    t.it('recognises a short answer to a question', function (assert) {
+      assert.ok(FB.fallback.readMessage('yeah').isAffirmative);
+      assert.ok(FB.fallback.readMessage('not really').isNegative);
+      assert.ok(FB.fallback.readMessage('idk').isShort);
+    });
+
+    t.it('never throws on unusual input', function (assert) {
+      [null, undefined, '', '   ', 12345, '?????'].forEach(function (value) {
+        var read = FB.fallback.readMessage(value);
+        assert.ok(read && typeof read.text === 'string', 'failed on ' + JSON.stringify(value));
+      });
+    });
+  });
+
+  describe('Wingman intent coverage', function (t) {
+    var cases = [
+      ['I still cannot make myself start.', 'cannot-start'],
+      ['Can you help me break this down?', 'break-it-down'],
+      ['I know what to do but I am overwhelmed.', 'overwhelmed'],
+      ['Can you help me think about this differently?', 'reframe'],
+      ['I am terrified I am going to fail this.', 'fear'],
+      ['There is not enough time left.', 'no-time'],
+      ['My mom keeps bringing it up.', 'people'],
+      ['Everyone else is way ahead of me.', 'comparison'],
+      ['It has to be perfect and I keep rewriting it.', 'perfectionism'],
+      ['I keep getting distracted and I cannot focus.', 'focus'],
+      ['I have barely slept all week.', 'tired'],
+      ['I wasted the whole day and I feel so lazy.', 'guilt'],
+      ['I cannot decide which one to do first.', 'decide'],
+      ['I cannot stop thinking about it.', 'rumination-loop'],
+      ['I just needed to vent about it.', 'venting'],
+      ['I already tried that and it did not work.', 'pushback'],
+      ['What is my next step?', 'what-now'],
+      ['Why did you pick that step for me?', 'explain-exercise'],
+      ['Thanks, that actually helped.', 'positive'],
+      ['Are you a real therapist?', 'about-app'],
+      ['I have no idea what they want from this.', 'uncertainty'],
+      ['hey', 'greeting']
+    ];
+
+    // Phrasings taken from how the wording actually arrives, rather than from
+    // the anchor sentences, which the patterns were written alongside.
+    var realWorld = [
+      'everyone in my class seems way further ahead',
+      'I am so behind it is not even funny',
+      'I feel like the only one struggling',
+      'I have five assignments and no idea which to do',
+      'why does this always happen to me',
+      'I keep saying I will do it later',
+      'how do I stop caring so much what people think',
+      'I have a presentation friday and I hate speaking',
+      'can you just tell me what to do',
+      'my brain will not shut up at night',
+      'I got a bad grade and I cannot stop replaying it',
+      'is my data safe here',
+      'I do not even know what the teacher wants',
+      'are you a real person'
+    ];
+
+    t.it('routes real phrasings somewhere more useful than the generic bucket', function (assert) {
+      realWorld.forEach(function (message) {
+        assert.notEqual(FB.fallback.matchIntentLexically(message).intent, 'general',
+          'fell through to general: ' + message);
+      });
+    });
+
+    t.it('routes each intent to itself', function (assert) {
+      cases.forEach(function (pair) {
+        assert.equal(FB.fallback.matchIntentLexically(pair[0]).intent, pair[1],
+          'mismatched: ' + pair[0]);
+      });
+    });
+
+    t.it('has a composer for every declared intent', function (assert) {
+      FB.fallback.INTENTS.concat([{ id: 'general' }]).forEach(function (intent) {
+        var pools = FB.fallback.COMPOSERS[intent.id];
+        assert.ok(pools, 'no composer for ' + intent.id);
+        ['reflect', 'insight', 'move', 'ask'].forEach(function (slot) {
+          assert.greater(pools[slot].length, 2, intent.id + ' has too few ' + slot + ' options');
+        });
+      });
+    });
+
+    t.it('writes patterns in the contracted form normalisation produces', function (assert) {
+      // normalize.js rewrites "is not" to "isn't" before the matcher sees the
+      // text, so a pattern spelling out the long form can never fire.
+      FB.fallback.INTENTS.forEach(function (intent) {
+        intent.patterns.forEach(function (pattern) {
+          var readable = pattern.re.source.replace(/\\s\+/g, ' ').replace(/\\b/g, '');
+          FB.normalize.CONTRACTIONS.forEach(function (rule) {
+            var probe = new RegExp(rule[0].source, 'i');
+            assert.notOk(probe.test(readable),
+              intent.id + ' pattern would be normalised away: ' + pattern.re.source);
+          });
+        });
+      });
+    });
+
+    t.it('gives every intent anchors for the on-device matcher', function (assert) {
+      FB.fallback.INTENTS.forEach(function (intent) {
+        assert.greater(intent.anchors.length, 2, intent.id + ' has too few anchors');
+      });
+    });
+  });
+
+  describe('Wingman reply quality', function (t) {
+    var ctx = {
+      hasAnalysis: true,
+      subject: 'three tests',
+      primarySignal: 'avoidance',
+      drivers: [{ id: 'avoidance', label: 'Difficulty getting started' }],
+      pressure: { value: 7, band: 'high' },
+      plan: {
+        steps: [
+          { stage: 'calm', label: 'Calm', exerciseId: 'one-minute-reset', done: false, rationale: 'Start here.' },
+          { stage: 'clarify', label: 'Clarify', exerciseId: 'good-enough-definition', done: false, rationale: 'Then this.' },
+          { stage: 'act', label: 'Act', exerciseId: 'two-minute-start', done: false, rationale: 'Then this.' }
+        ]
+      },
+      completedExercises: []
+    };
+
+    t.it('does not repeat itself over a long run of the same intent', function (assert) {
+      var seen = [];
+      for (var turn = 0; turn < 6; turn++) {
+        var reply = FB.fallback.compose('cannot-start', ctx, turn, {
+          message: 'I still cannot start',
+          recent: seen
+        });
+        assert.excludes(seen, reply, 'repeated a reply on turn ' + turn);
+        seen.push(reply);
+      }
+    });
+
+    t.it('quotes the user\'s own words back when they give one', function (assert) {
+      var match = FB.fallback.matchIntentLexically('my mom keeps asking about it');
+      var reply = FB.fallback.compose(match.intent, ctx, 0, { read: match.read });
+      assert.ok(reply.indexOf('your mom') !== -1, 'the reply did not use their wording: ' + reply);
+      assert.equal(reply.indexOf('my mom'), -1, 'the reply spoke in the first person: ' + reply);
+    });
+
+    t.it('never says my when echoing a person back', function (assert) {
+      ['my mum', 'my dad', 'my parents', 'my coach', 'my best friend'].forEach(function (phrase) {
+        var match = FB.fallback.matchIntentLexically(phrase + ' keeps bringing it up');
+        for (var turn = 0; turn < 3; turn++) {
+          var reply = FB.fallback.compose(match.intent, ctx, turn, { read: match.read });
+          assert.equal(reply.indexOf(phrase), -1, 'said "' + phrase + '" back: ' + reply);
+        }
+      });
+    });
+
+    t.it('always ends with something the user can answer', function (assert) {
+      FB.fallback.INTENTS.concat([{ id: 'general' }]).forEach(function (intent) {
+        for (var turn = 0; turn < 3; turn++) {
+          var reply = FB.fallback.compose(intent.id, ctx, turn);
+          assert.ok(/[?.]$/.test(reply.trim()), intent.id + ' ended oddly: ' + reply);
+        }
+      });
+    });
+
+    t.it('references the session in every reply that has one to reference', function (assert) {
+      var markers = ['three tests', 'One-minute reset', 'difficulty getting started', '7 out of 10',
+        'Good enough definition', 'Two-minute start'];
+      FB.fallback.INTENTS.concat([{ id: 'general' }]).forEach(function (intent) {
+        for (var turn = 0; turn < 3; turn++) {
+          var reply = FB.fallback.compose(intent.id, ctx, turn);
+          var grounded = markers.some(function (marker) { return reply.indexOf(marker) !== -1; });
+          // A long, specific answer is allowed to stand on its own.
+          assert.ok(grounded || reply.length >= 260,
+            'ungrounded short reply for ' + intent.id + ': ' + reply);
+        }
+      });
+    });
+
+    t.it('stays honest about what it is when asked', function (assert) {
+      var reply = FB.fallback.compose('about-app', ctx, 0, { message: 'are you a real therapist?' });
+      assert.ok(/not therapy|not a therapist|study and stress tool/i.test(reply),
+        'did not decline the therapist framing: ' + reply);
+    });
+
+    t.it('works with no session context at all', function (assert) {
+      FB.fallback.INTENTS.concat([{ id: 'general' }]).forEach(function (intent) {
+        var reply = FB.fallback.compose(intent.id, { hasAnalysis: false }, 0);
+        assert.greater(reply.length, 20, intent.id + ' produced nothing without a session');
+      });
+    });
+
+    t.it('offers suggestions that fit the state of the session', function (assert) {
+      var cold = FB.fallback.suggestionsFor({ hasAnalysis: false });
+      assert.equal(cold.length, 4);
+      var warm = FB.fallback.suggestionsFor(ctx);
+      assert.equal(warm.length, 4);
+      assert.notEqual(cold.join('|'), warm.join('|'), 'suggestions ignored the session');
+    });
+  });
 })(typeof window !== 'undefined' ? window.FB : global.FB);

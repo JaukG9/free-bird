@@ -208,6 +208,46 @@
     remove(KEYS.chat);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Cross-tab change notification                                       */
+  /* ------------------------------------------------------------------ */
+
+  /** Reverse lookup: storage key -> the slice name the state store uses. */
+  var SLICE_BY_KEY = {};
+  Object.keys(KEYS).forEach(function (name) { SLICE_BY_KEY[KEYS[name]] = name; });
+
+  function sliceForKey(key) {
+    return Object.prototype.hasOwnProperty.call(SLICE_BY_KEY, key) ? SLICE_BY_KEY[key] : null;
+  }
+
+  /**
+   * Watch for writes made by another tab of this app.
+   *
+   * The `storage` event only fires in documents *other* than the one that made
+   * the write, so this can never echo our own change back at us. `fn` receives
+   * the slice name ('prefs', 'session', 'history', 'chat'), or null when the
+   * whole store was cleared, which is what `localStorage.clear()` and our own
+   * clearAll() look like from the outside.
+   */
+  function onExternalChange(fn) {
+    if (typeof window.addEventListener !== 'function') return function () {};
+
+    function handler(event) {
+      // Some browsers fire for sessionStorage too. We only own localStorage.
+      if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (event.key === null || event.key === undefined) {
+        fn(null);
+        return;
+      }
+      var key = String(event.key);
+      if (key.indexOf(PREFIX) !== 0) return;
+      fn(sliceForKey(key));
+    }
+
+    window.addEventListener('storage', handler);
+    return function stop() { window.removeEventListener('storage', handler); };
+  }
+
   FB.storage = {
     PREFIX: PREFIX,
     KEYS: KEYS,
@@ -229,6 +269,8 @@
     addHistoryEntry: addHistoryEntry,
     getChat: getChat,
     setChat: setChat,
-    clearChat: clearChat
+    clearChat: clearChat,
+    sliceForKey: sliceForKey,
+    onExternalChange: onExternalChange
   };
 })(window.FB = window.FB || {});

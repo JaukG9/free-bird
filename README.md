@@ -123,10 +123,14 @@ Lexical is weighted slightly higher because it is precise about the exact words 
 
 Wingman is the conversational surface, and its architecture is stated plainly in the interface because it would be easy to imply more than it does.
 
-- The user's message is matched to one of **thirteen intents** plus a general fallback.
+- The user's message is matched to one of **twenty-two intents** plus a general fallback.
 - With the model loaded, matching is **embedding similarity** against per-intent anchor centroids, with a floor of 0.28 below which the general intent is returned instead of pretending to have understood.
 - Without the model, matching is **lexical**, and no confidence figure is reported at all.
-- The reply itself is **composed from a written template set**, filled with the live session context: the student's own subject phrase, pressure estimate, detected drivers, current plan step, completed exercises, and check-in state. Variants rotate by turn index, so the same question twice does not return identical text, and the same demo run reproduces exactly.
+- The reply itself is **composed from a written template set**, filled with the live session context: the student's own subject phrase, pressure estimate, detected drivers, current plan step, completed exercises, and check-in state.
+
+  A reply is assembled from four slots, each drawn from its own pool: **reflect** (say back what they wrote, using their nouns), **insight** (the observation this intent is worth making), **move** (one concrete action, sized to their pressure and deadline), and **ask** (a question that hands the turn back). A message reader pulls the task, the person, the deadline and any quantity out of the student's own sentence first, so a reply can say "write the one sentence you would say to your mum" rather than "speak to the person involved". Slot selection is deterministic from the intent, the turn, and a hash of the message, so the same input always reproduces exactly while real conversations vary widely. Before a reply is returned it is checked for at least one reference to the student's own session, and grounded if it has none.
+
+  Two constraints worth naming. Patterns are matched against text that `ai/normalize.js` has already contracted, so they must be written in contracted form; there is a test that fails on the long form. And when a message asks whether Wingman is a therapist or a person, the refusal is not left to slot rotation, it short-circuits the pool.
 
 Every Wingman message carries a label saying which matcher chose it: *"Intent matched on device · similarity 0.41 · reply composed from a written template"* or *"Intent matched by rules · reply composed from a written template."*
 
@@ -409,7 +413,7 @@ The Node runner loads the real application source into a `vm` context with a min
 
 ### Coverage
 
-**103 tests, all passing.**
+**121 tests, all passing.**
 
 | Suite | Covers |
 | --- | --- |
@@ -427,6 +431,9 @@ The Node runner loads the real application source into a `vm` context with a min
 | Content policy | **No clinical claims, no diagnostic language, no em dashes** in any user-facing copy |
 | Plan construction | Three ordered stages, real exercise ids, rationales, determinism, profile adaptation |
 | Wingman | A reply for every intent, variation across turns, determinism per turn, context usage, never claims to be a therapist |
+| Wingman message reading | Task, person, deadline and quantity extraction; person echoed in the second person; never throws on unusual input |
+| Wingman intent coverage | Every intent routes to itself, real student phrasings do not fall through to the generic bucket, patterns survive normalisation |
+| Wingman reply quality | No repetition over six turns of one intent, quotes the user's wording, always ends answerable, grounded in the session, works with no session at all |
 
 ### Manual verification performed
 

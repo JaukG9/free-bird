@@ -1331,6 +1331,41 @@ strong { font-weight: 600; }
   font-size: var(--fs-xs);
   color: var(--ink-mute);
 }
+.tag--live {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* The session that is open right now, shown above the recorded timeline. */
+.panel--live { border-color: var(--accent-line); background: var(--accent-soft); }
+.panel--live .plan-progress { max-width: none; margin-bottom: var(--s4); }
+.panel--live .plan-progress__label { flex: 0 1 auto; }
+.panel--live .plan-progress__track { background: var(--surface); min-width: 4rem; }
+.panel--live .summary-row { border-bottom-color: var(--accent-line); }
+.panel--live .meta { margin-top: var(--s3); }
+
+.live-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+.live-head .panel__title { margin-bottom: 0; }
+
+.summary-row--tight {
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s4);
+}
+.summary-row--tight .summary-item dd { font-size: var(--fs-lg); }
+.summary-item__note {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-mute);
+}
 
 /* ============================================================== ABOUT === */
 

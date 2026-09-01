@@ -182,12 +182,23 @@
   /**
    * Produce one Wingman reply. Safety is scanned on the message first, exactly
    * as it is for the stress check.
+   *
+   * @param {string} message
+   * @param {object} sessionContext  from js/wingman-context.js
+   * @param {number} turn            rotates the composer's slot pools
+   * @param {object} [options]       { recent: string[] } previously sent replies,
+   *                                 so the composer can avoid repeating one
    */
-  function respond(message, sessionContext, turn) {
+  function respond(message, sessionContext, turn, options) {
+    options = options || {};
     var safety = FB.safety.scan(message);
     if (FB.safety.isBlocking(safety)) {
       return Promise.resolve({ blocked: true, safety: safety });
     }
+
+    // Read once here rather than inside the composer, so the semantic path
+    // gets the same extracted nouns and deadlines that the lexical path does.
+    var read = FB.fallback.readMessage(message);
 
     function finish(match) {
       return {
@@ -196,7 +207,12 @@
         intent: match.intent,
         method: match.method,
         confidence: typeof match.confidence === 'number' ? match.confidence : null,
-        text: FB.fallback.compose(match.intent, sessionContext, turn)
+        secondary: match.secondary || null,
+        text: FB.fallback.compose(match.intent, sessionContext, turn, {
+          read: read,
+          secondary: match.secondary || null,
+          recent: options.recent || []
+        })
       };
     }
 
@@ -209,7 +225,17 @@
         if (!centroids) return FB.fallback.matchIntentLexically(message);
         return FB.model.embed(String(message).toLowerCase()).then(function (vector) {
           var match = FB.fallback.matchIntentSemantically(vector, centroids);
-          return match || FB.fallback.matchIntentLexically(message);
+          if (!match) return FB.fallback.matchIntentLexically(message);
+          // The embedding decides the intent; the lexical pass is still worth
+          // running for its runner-up, which is what lets a message about two
+          // things be answered as being about two things.
+          if (!match.secondary) {
+            var lexical = FB.fallback.matchIntentLexically(message);
+            if (lexical.intent !== match.intent && lexical.score >= 3) {
+              match.secondary = lexical.intent;
+            }
+          }
+          return match;
         });
       })
       .catch(function () {
