@@ -114,13 +114,39 @@
   }
 
   /**
-   * @param {{mode?: 'rules'|'blended', onProgress?: function}} options
+   * Which labelled set to score against.
+   *
+   *   dev      written alongside the classifier, a regression check
+   *   holdout  written after it was finished and never used to tune anything
+   *   all      both, for a headline figure
+   *
+   * The two are reported separately because they measure different things.
+   * Collapsing them into one number would hide exactly the gap that makes the
+   * held-out set worth having.
+   */
+  function casesFor(dataset) {
+    var dev = (FB.evaluationData && FB.evaluationData.CASES) || [];
+    var holdout = (FB.evaluationHoldout && FB.evaluationHoldout.CASES) || [];
+    if (dataset === 'holdout') return holdout;
+    if (dataset === 'all') return dev.concat(holdout);
+    return dev;
+  }
+
+  function datasetLabel(dataset) {
+    if (dataset === 'holdout') return 'held-out set';
+    if (dataset === 'all') return 'dev + held-out';
+    return 'development set';
+  }
+
+  /**
+   * @param {{mode?: 'rules'|'blended', dataset?: 'dev'|'holdout'|'all', onProgress?: function}} options
    * @returns {Promise<object>} report
    */
   function run(options) {
     options = options || {};
     var mode = options.mode === 'blended' ? 'blended' : 'rules';
-    var cases = FB.evaluationData.CASES;
+    var dataset = options.dataset || 'dev';
+    var cases = casesFor(dataset);
 
     if (mode === 'blended' && !FB.model.semanticReady()) {
       return Promise.reject(new Error('Blended mode needs the on-device model. Load it first, then run again.'));
@@ -190,6 +216,8 @@
       return {
         generatedAt: new Date().toISOString(),
         mode: mode,
+        dataset: dataset,
+        datasetLabel: datasetLabel(dataset),
         modelId: mode === 'blended' ? FB.model.MODEL_ID : null,
         caseCount: cases.length,
 
@@ -331,6 +359,8 @@
 
   FB.evaluate = {
     run: run,
+    casesFor: casesFor,
+    datasetLabel: datasetLabel,
     format: format,
     classificationReport: classificationReport,
     confusionMatrix: confusionMatrix

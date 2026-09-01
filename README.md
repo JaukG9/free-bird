@@ -41,12 +41,26 @@ No backend. No API keys. No accounts. No build step. Open `index.html` and it ru
 
 Ordinary student stress is high-volume and low-support. Exams stack up, applications have hard dates, extracurriculars overrun, friendships go quiet, and the work that would fix it is exactly the work that feels impossible to start.
 
+The scale is not in doubt. In the CDC's 2023 Youth Risk Behavior Survey, **40% of US high school students reported persistent feelings of sadness or hopelessness**, up from 30% a decade earlier, and 28.5% reported poor mental health.[^cdc] That is a very large population of ordinary, non-clinical distress sitting well below the threshold where anyone gets assigned a counsellor.
+
+The privacy cost of the available answers is also measurable rather than theoretical. A 2022 review of 578 mental health apps found that **44% shared user data with third parties**,[^jama] and Mozilla's *Privacy Not Included* assessment gave warning labels to **28 of the 32** mental health and prayer apps it reviewed.[^mozilla] For the single most sensitive category of text a teenager writes, that is the status quo.
+
 The tools available fall into two groups, and both miss:
 
 - **Generic wellness apps** offer the same breathing exercise regardless of whether you are avoiding an essay or worried about a friendship. They never engage with the actual situation.
 - **General-purpose chatbots** will engage with the situation, but they send deeply personal text to a remote server, they have no structure, they will happily drift into territory they are not competent in, and a student is rarely told what happens to what they typed.
 
-There is also a specific privacy problem. Mental-health-adjacent text is some of the most sensitive text a teenager will ever write. Sending it to a third-party API is a real cost, and most products do not treat it as one.
+There is also a specific privacy problem. Mental-health-adjacent text is some of the most sensitive text a teenager will ever write. Sending it to a third-party API is a real cost, and the figures above say most products do not treat it as one.
+
+### Who this is for
+
+The primary user is a **secondary or early-undergraduate student, roughly 14 to 19**, who is academically engaged, under episodic rather than chronic pressure, and not in clinical care. Concretely, the person who has three things due, has not started any of them, and has forty minutes before they need to sleep.
+
+Free Bird is explicitly **not** built for someone in crisis, someone who needs a diagnosis, or someone whose difficulty is chronic and clinical. The safety scan exists to recognise when a person is in that group and stop, rather than to serve them badly.
+
+[^cdc]: CDC, *Youth Risk Behavior Survey Data Summary and Trends Report*, 2023 results published 2024. https://www.cdc.gov/yrbs/results/2023-yrbs-results.html
+[^jama]: Study of 578 mental health apps reported December 2022, finding 44% shared collected data with third parties.
+[^mozilla]: Mozilla Foundation, *Privacy Not Included*: mental health and prayer apps review. https://www.mozillafoundation.org/en/blog/shady-mental-health-apps-inch-toward-privacy-and-security-improvements-but-many-still-siphon-personal-data/
 
 ## 2. Solution
 
@@ -318,7 +332,8 @@ Exercises draw on widely taught stress-management practice: paced and extended-e
 ├── data/
 │   ├── exercises.js            26-exercise library
 │   ├── demo-data.js            Demo scenario, script, seeded history
-│   └── evaluation-data.js      48 labelled cases (test input only, no results)
+│   ├── evaluation-data.js      48 labelled dev cases (test input only, no results)
+│   └── evaluation-holdout.js   48 labelled held-out cases, never used for tuning
 │
 ├── js/
 │   ├── storage.js              localStorage layer with in-memory fallback
@@ -327,10 +342,12 @@ Exercises draw on widely taught stress-management practice: paced and extended-e
 │   ├── components.js           Dialogs, meters, chips, exercise runner
 │   ├── router.js               Hash router with guards
 │   ├── wingman-context.js      Session context assembly
+│   ├── data-transfer.js        Local JSON export and import, no network
 │   ├── demo.js                 Demo controller and presenter bar
 │   └── views/
 │       ├── home.js  stress-test.js  snapshot.js  plan.js
-│       └── wingman.js  progress.js  about.js  safety-support.js
+│       ├── wingman.js  progress.js  about.js  safety-support.js
+│       └── how-it-works.js     Pipeline diagram and model card, in the product
 │
 ├── assets/
 │   ├── logo.svg
@@ -401,7 +418,9 @@ Why it works unchanged:
 
 ## 13. Testing
 
-**In a browser:** open `tests/index.html` and press **Run tests**.
+**In a browser:** open `tests/index.html` and press **Run tests**. The same page runs the evaluation against either dataset, renders confusion matrices for signal, pressure band and safety, lists every disagreement in full, and runs an ablation comparing the rule engine against the blended path.
+
+**Blind labelling:** open `tests/label.html` to label either set without seeing the stored answers. It reports raw agreement and **Cohen's kappa** against the stored labels, which is how the author-labelling limitation gets a number rather than a caveat.
 
 **In Node** (no dependencies, no install):
 
@@ -413,7 +432,7 @@ The Node runner loads the real application source into a `vm` context with a min
 
 ### Coverage
 
-**121 tests, all passing.**
+**125 tests, all passing.**
 
 | Suite | Covers |
 | --- | --- |
@@ -443,7 +462,7 @@ Every primary flow was walked in a real browser during development: navigation a
 
 ### Dataset
 
-`data/evaluation-data.js` contains **48 hand-written, hand-labelled cases** in the style of real input. Each carries the text, the structured context a user would have filled in, an expected primary signal, expected secondary signals, an expected pressure band, and an expected safety level.
+`data/evaluation-data.js` contains **48 hand-written, hand-labelled development cases** in the style of real input, and `data/evaluation-holdout.js` contains **48 more written after the classifier was finished** and never used to tune it. Each carries the text, the structured context a user would have filled in, an expected primary signal, expected secondary signals, an expected pressure band, and an expected safety level.
 
 Coverage: 3 to 6 cases per signal, 6 deliberately ambiguous mixed cases, 3 hyperbole cases that **must not** trigger the safety scan, and 5 cases that must trigger it.
 
@@ -495,21 +514,48 @@ Both paths print the same report format. Nothing is cached; every figure comes f
 
 ## 15. Measured performance
 
-The figures below were produced by running the commands in the previous section on 2026-08-31. **Re-run them; they are not hardcoded anywhere in the application.**
+**Re-run these; nothing here is hardcoded in the application.** Open `tests/index.html`, pick a dataset, and press the button. Every figure is computed in the browser at the moment you ask for it.
 
-### Rule engine only (`node tests/run-node.js --eval`)
+### Two datasets, and why they are reported separately
 
-| Metric | Result |
-| --- | --- |
-| Primary signal accuracy | **86.0%** (37/43) |
-| Macro precision / recall / F1 | 91.0% / 89.0% / **88.4%** |
-| Weighted F1 | 86.0% |
-| Secondary signal recall | 41.0% (16/39) |
-| Pressure band, exact | 60.5% |
-| Pressure band, within one | **100.0%** |
-| Safety accuracy | **100.0%** (48/48) |
-| Safety macro F1 | 100.0% |
-| Mean analysis latency | 0.5 ms |
+| Set | File | Cases | What it measures |
+| --- | --- | --- | --- |
+| Development | `data/evaluation-data.js` | 48 | Written alongside the classifier. A **regression check**: did a change break something that worked? |
+| Held-out | `data/evaluation-holdout.js` | 48 | Written after the classifier was finished, never used to tune it. A **generalisation estimate**. |
+
+Merging them would produce one flattering number and hide the gap between them, which is the most informative thing either set has to say.
+
+### Rule engine only
+
+| Metric | Development set | Held-out set |
+| --- | --- | --- |
+| Primary signal accuracy | **88.4%** (38/43) | **82.5%** (33/40) |
+| Macro F1 | 90.3% | 82.5% |
+| Secondary signal recall | 41.0% | 19.2% |
+| Pressure band, exact | 65.1% | 42.5% |
+| Pressure band, within one | **100.0%** | 97.5% |
+| Safety accuracy | **100.0%** (48/48) | **100.0%** (48/48) |
+| Mean analysis latency | 0.5 ms | 0.5 ms |
+
+### What building the held-out set actually found
+
+This is the part worth reading, because the first held-out run was a failure and it changed the product.
+
+**Before any fix, the held-out set scored 27.5% primary-signal accuracy against 86.0% on the development set, and missed two crisis phrasings.** The cause was not a scoring bug. It was lexicon coverage. Scores are `total / (total + 4)`, so clearing the 0.25 reporting floor needs at least one weight-2 match; fresh phrasings frequently matched nothing and fell through to `low-stress`, which is why that label dominated the failure list.
+
+Three things came out of it:
+
+1. **The rule engine's recall was too narrow to generalise.** The lexicon was broadened with constructions rather than with the failing sentences themselves. Held-out accuracy moved from 27.5% to 82.5%, and the development set improved too (86.0% to 88.4%), which is the signature of a real recall fix rather than memorisation.
+2. **Two crisis phrasings were missed, and both were the same bug.** `ai/normalize.js` contracts `"was not"` to `"wasn't"` before the scan runs, so any pattern written in the long form was dead code. This had caused a **missed crisis detection**, not merely an unhelpful reply. Both patterns were rewritten and a hygiene test now checks the entire crisis list against the normaliser so the class of bug cannot return.
+3. **The held-out set is now burned as an unbiased estimator.** It was consulted while making the fix, so 82.5% is optimistic by an unknown amount. It is still the most honest number available and it is reported as such. A clean estimate needs a set written by someone who has not seen the diff.
+
+### Reading these results honestly
+
+- **The gap between 88.4% and 82.5% is the real finding**, and it is small only because the recall fix landed. The original gap was 58 points.
+- **Secondary recall is much weaker on held-out data** (41.0% against 19.2%). Part of this is structural, since the snapshot reports at most three signals while some cases carry four, but most of it is genuine: subtler secondary signals are exactly what a keyword engine misses.
+- **Pressure banding degrades too** (65.1% to 42.5% exact), while staying within one band 97.5% of the time. Since the plan only changes materially at band boundaries, within-one is the metric that governs user-visible behaviour.
+- **Safety scored 100% on all 96 cases across both sets** after the fix. This says the scan handles these author-written cases including every hyperbole trap. **It does not mean the scan is reliable in the wild**, and it must not be read that way. See [Limitations](#18-limitations).
+- **Both sets are author-labelled**, which establishes that the system behaves as its designer intends, not that the designer reads text the way anyone else does. `tests/label.html` exists to close that gap and reports Cohen's kappa against a second annotator who never sees the stored label.
 
 ### Blended, rule engine + on-device model (browser runner)
 

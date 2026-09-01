@@ -5,8 +5,7 @@
       "name": "free-bird",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "-m",
-        "http.server",
+        ".claude/devserver.py",
         "4173"
       ],
       "port": 4173

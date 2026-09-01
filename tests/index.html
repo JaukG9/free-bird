@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Free Bird tests and evaluation</title>
+  <title>Free Bird model card and evaluation</title>
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
   <style>
     :root {
-      --bg: #f7f6f2; --ink: #191d1c; --mute: #6b7370; --line: #e3e0d7;
-      --ok: #2f6b4f; --bad: #97402c; --accent: #245f5c;
+      --bg: #f7f6f2; --surface: #fffefb; --ink: #191d1c; --mute: #6b7370; --line: #e3e0d7;
+      --ok: #2f6b4f; --bad: #97402c; --accent: #245f5c; --accent-soft: #e8f0ee;
       --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
       --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
@@ -18,11 +18,12 @@
       background: var(--bg); color: var(--ink);
       font-family: var(--font); font-size: 15px; line-height: 1.6;
     }
-    .wrap { max-width: 900px; margin: 0 auto; }
+    .wrap { max-width: 980px; margin: 0 auto; }
     h1 { font-size: 1.6rem; margin: 0 0 .35rem; letter-spacing: -.02em; }
-    h2 { font-size: 1.05rem; margin: 2.5rem 0 .75rem; letter-spacing: -.01em; }
-    .lede { color: var(--mute); margin: 0 0 1.5rem; max-width: 62ch; }
-    .bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+    h2 { font-size: 1.05rem; margin: 2.5rem 0 .5rem; letter-spacing: -.01em; }
+    h3 { font-size: .9rem; margin: 1.5rem 0 .5rem; }
+    .lede { color: var(--mute); margin: 0 0 1.25rem; max-width: 66ch; }
+    .bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; align-items: center; }
     button {
       padding: .5rem .9rem; min-height: 2.4rem;
       background: #fff; border: 1px solid #cfcbbf; border-radius: 5px;
@@ -31,64 +32,153 @@
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button:disabled { opacity: .5; cursor: not-allowed; }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    label.field { font-size: .8rem; color: var(--mute); display: inline-flex; align-items: center; gap: .35rem; }
+    select { font: inherit; font-size: .85rem; padding: .35rem .5rem; border: 1px solid #cfcbbf; border-radius: 5px; background: #fff; }
     .summary {
       padding: .85rem 1.1rem; border: 1px solid var(--line); border-radius: 6px;
-      background: #fffefb; margin-bottom: 1.25rem; font-variant-numeric: tabular-nums;
+      background: var(--surface); margin-bottom: 1.25rem; font-variant-numeric: tabular-nums;
     }
     .summary.pass { border-color: var(--ok); color: var(--ok); }
     .summary.fail { border-color: var(--bad); color: var(--bad); }
     .suite { margin-bottom: 1.25rem; }
     .suite h3 { font-size: .9rem; margin: 0 0 .35rem; }
-    ul { list-style: none; margin: 0; padding: 0; }
-    li { padding: .2rem 0 .2rem 1.6rem; position: relative; font-size: .875rem; }
-    li::before { position: absolute; left: 0; font-weight: 700; font-size: .75rem; }
-    li.pass::before { content: "PASS"; content: "\2713"; color: var(--ok); }
-    li.fail::before { content: "\2717"; color: var(--bad); }
-    li.fail { color: var(--bad); }
-    li .err { display: block; font-family: var(--mono); font-size: .75rem; color: var(--bad); padding-left: .2rem; }
+    ul.tests { list-style: none; margin: 0; padding: 0; }
+    ul.tests li { padding: .2rem 0 .2rem 1.6rem; position: relative; font-size: .875rem; }
+    ul.tests li::before { position: absolute; left: 0; font-weight: 700; font-size: .75rem; }
+    ul.tests li.pass::before { content: "\2713"; color: var(--ok); }
+    ul.tests li.fail::before { content: "\2717"; color: var(--bad); }
+    ul.tests li.fail { color: var(--bad); }
+    ul.tests li .err { display: block; font-family: var(--mono); font-size: .75rem; color: var(--bad); padding-left: .2rem; }
     pre {
-      background: #fffefb; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
       padding: 1rem; overflow-x: auto; font-family: var(--mono); font-size: .75rem;
       line-height: 1.55; white-space: pre;
     }
-    .note { font-size: .8rem; color: var(--mute); max-width: 70ch; }
+    .note { font-size: .8rem; color: var(--mute); max-width: 72ch; }
     .status { font-size: .85rem; color: var(--mute); margin-bottom: 1rem; }
     a { color: var(--accent); }
+
+    .panel {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .panel--flag { border-color: var(--accent); background: var(--accent-soft); }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+    .card__label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
+    .card__value { font-size: 1.5rem; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .card__note { font-size: .75rem; color: var(--mute); }
+
+    table { border-collapse: collapse; width: 100%; font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .scroll { overflow-x: auto; }
+    th, td { padding: .35rem .5rem; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { font-weight: 600; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--mute); }
+    td.num, th.num { text-align: right; }
+    tr.total td { font-weight: 600; border-top: 2px solid var(--line); }
+
+    .cm td.cell { text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--line); }
+    .cm th.rowhead { font-size: .7rem; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 500; }
+    .cm th.colhead {
+      font-size: .65rem; text-transform: none; letter-spacing: 0;
+      writing-mode: vertical-rl; transform: rotate(180deg);
+      height: 7.5rem; vertical-align: bottom; padding: .25rem;
+    }
+    .cm td.diag { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .cm td.zero { color: #c9c5bb; }
+
+    .delta-up { color: var(--ok); font-weight: 600; }
+    .delta-down { color: var(--bad); font-weight: 600; }
+    .delta-flat { color: var(--mute); }
+
+    .legend { font-size: .75rem; color: var(--mute); margin-top: .5rem; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Free Bird tests and evaluation</h1>
+    <h1>Free Bird model card and evaluation</h1>
     <p class="lede">
-      Runs the same source files the application loads. Nothing here is precomputed:
-      every figure below is produced by the run you start.
+      Every figure on this page is computed by the run you start, in this browser,
+      from the same source files the application loads. Nothing here is precomputed
+      and no number is stored in the repository until it has been produced by a run.
     </p>
 
     <div class="bar">
       <button id="run-tests" class="primary" type="button">Run tests</button>
-      <button id="run-eval" type="button">Run evaluation (rule engine)</button>
+      <label class="field">
+        Dataset
+        <select id="dataset">
+          <option value="dev">Development set</option>
+          <option value="holdout">Held-out set</option>
+          <option value="all">Both</option>
+        </select>
+      </label>
+      <button id="run-eval" type="button">Run evaluation</button>
       <button id="load-model" type="button">Load on-device model</button>
-      <button id="run-eval-blended" type="button" disabled>Run evaluation (blended)</button>
+      <button id="run-ablation" type="button" disabled>Run ablation (rules vs blended)</button>
       <button id="copy" type="button" disabled>Copy report</button>
       <a href="../index.html" style="align-self:center;margin-left:.5rem;font-size:.85rem;">Back to the app</a>
     </div>
 
     <p class="status" id="status">Ready.</p>
     <div id="summary"></div>
+    <div id="dashboard"></div>
     <div id="results"></div>
     <div id="report"></div>
 
-    <h2>Notes</h2>
+    <h2>How to read this page</h2>
+    <div class="panel">
+      <h3 style="margin-top:0">Two datasets, and why they are not merged</h3>
+      <p class="note">
+        The <strong>development set</strong> (<code>data/evaluation-data.js</code>, 48 cases) was written
+        alongside the classifier. Cases written while you are building the thing they test end up shaped
+        by it, so accuracy on this set is a <em>regression check</em>: it tells you whether a change broke
+        something that used to work. It is not a generalisation estimate and it should not be read as one.
+      </p>
+      <p class="note">
+        The <strong>held-out set</strong> (<code>data/evaluation-holdout.js</code>, 48 cases) was written
+        after the classifier and the lexicon were finished, without consulting either, and has never been
+        used to tune anything. The gap between the two numbers is the honest measure of how much the
+        development set flatters the system. A held-out score meaningfully below the development score is
+        the expected result, not a bug, and it is reported rather than smoothed over.
+      </p>
+      <p class="note">
+        <strong>The rule that keeps this honest:</strong> when a held-out case fails, the response is to
+        report it. Adding its wording to the lexicon would convert the held-out set into a second
+        development set and destroy the only property that makes it worth having.
+      </p>
+
+      <h3>Confusion matrices</h3>
+      <p class="note">
+        Rows are the label a reasonable reader assigned. Columns are what the system predicted. The
+        outlined diagonal is where they agree. Reading along a row shows what a given signal gets mistaken
+        for, which is more useful than a single accuracy number when deciding what to fix next.
+      </p>
+
+      <h3>Ablation</h3>
+      <p class="note">
+        Runs the identical dataset twice, once with the rule engine alone and once blended with the
+        on-device sentence embedding model, and reports the difference. This is the measurement that
+        justifies shipping the model at all, and it is the reason the model is optional: if a metric does
+        not move, the 23 MB download is not buying anything for that metric.
+      </p>
+    </div>
+
+    <h2>Notes and limitations</h2>
     <p class="note">
-      Blended evaluation needs the on-device model, which is roughly 25 MB and is
-      downloaded from a public CDN. The rule-engine evaluation needs no download
-      and is the mode the Node runner measures with
-      <code>node tests/run-node.js --eval</code>.
+      Blended evaluation needs the on-device model, roughly 25 MB from a public CDN. The rule-engine
+      path needs no download and is what <code>node tests/run-node.js --eval</code> measures.
     </p>
     <p class="note">
-      The dataset in <code>data/evaluation-data.js</code> was written and labelled by
-      the project author. It is a development set for catching regressions, not an
-      independent benchmark.
+      Both datasets were written by the project author. Author-written labels are a real methodological
+      limitation: they establish that the system behaves as its designer intends, not that the designer's
+      intent matches how other people read the same text. The
+      <a href="label.html">blind labelling tool</a> exists to close that gap, and reports Cohen's kappa
+      against a second annotator who never sees the stored label.
+    </p>
+    <p class="note">
+      96 labelled cases across ten signal classes is a small set. Per-class figures for classes with
+      three or four supporting examples carry wide error bars and should not be quoted as precise.
     </p>
   </div>
 
@@ -101,6 +191,7 @@
   <script src="../ai/fallback.js"></script>
   <script src="../ai/pipeline.js"></script>
   <script src="../data/evaluation-data.js"></script>
+  <script src="../data/evaluation-holdout.js"></script>
   <script src="test-harness.js"></script>
   <script src="classifier-tests.js"></script>
   <script src="safety-tests.js"></script>
@@ -112,19 +203,305 @@
       var FB = window.FB;
       var statusNode = document.getElementById('status');
       var summaryNode = document.getElementById('summary');
+      var dashboardNode = document.getElementById('dashboard');
       var resultsNode = document.getElementById('results');
       var reportNode = document.getElementById('report');
       var copyBtn = document.getElementById('copy');
+      var datasetSelect = document.getElementById('dataset');
       var lastReportText = '';
 
       function setStatus(text) { statusNode.textContent = text; }
 
       function clearOutput() {
         summaryNode.innerHTML = '';
+        dashboardNode.innerHTML = '';
         resultsNode.innerHTML = '';
         reportNode.innerHTML = '';
         copyBtn.disabled = true;
       }
+
+      function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k === 'class') node.className = attrs[k];
+          else if (k === 'text') node.textContent = attrs[k];
+          else node.setAttribute(k, attrs[k]);
+        });
+        (children || []).forEach(function (c) {
+          if (c === null || c === undefined) return;
+          node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+        });
+        return node;
+      }
+
+      function pct(v) {
+        return (v === null || v === undefined) ? 'n/a' : (v * 100).toFixed(1) + '%';
+      }
+
+      /* ---------------------------------------------------------- cards */
+
+      function statCard(label, value, note) {
+        return el('div', { class: 'card' }, [
+          el('div', { class: 'card__label', text: label }),
+          el('div', { class: 'card__value', text: value }),
+          note ? el('div', { class: 'card__note', text: note }) : null
+        ]);
+      }
+
+      function headlineCards(report) {
+        return el('div', { class: 'panel' }, [
+          el('h3', { style: 'margin-top:0', text: 'Headline metrics, ' + report.datasetLabel + ', ' + report.mode + ' mode' }),
+          el('div', { class: 'cards' }, [
+            statCard('Primary signal accuracy', pct(report.primarySignal.accuracy),
+              report.primarySignal.correct + ' of ' + report.primarySignal.n + ' correct'),
+            statCard('Macro F1', pct(report.primarySignal.macroF1), 'unweighted mean across classes'),
+            statCard('Secondary recall', pct(report.secondarySignals.recall),
+              report.secondarySignals.found + ' of ' + report.secondarySignals.expected + ' found'),
+            statCard('Pressure band exact', pct(report.pressureBand.accuracy),
+              'within one band: ' + pct(report.pressureBand.withinOneBand)),
+            statCard('Safety accuracy', pct(report.safety.accuracy),
+              report.safety.correct + ' of ' + report.safety.n + ' cases'),
+            statCard('Mean latency', report.latency ? report.latency.meanMs.toFixed(1) + ' ms' : 'n/a',
+              report.latency ? 'max ' + report.latency.maxMs.toFixed(0) + ' ms' : null)
+          ])
+        ]);
+      }
+
+      /* ------------------------------------------------ confusion matrix */
+
+      function shortLabel(label) {
+        return String(label).replace(/-/g, ' ');
+      }
+
+      function confusionTable(title, confusion, labels, caption) {
+        var head = el('tr', {}, [el('th', { class: 'rowhead', text: '' })].concat(
+          labels.map(function (l) { return el('th', { class: 'colhead', text: shortLabel(l) }); })
+        ));
+
+        // Shade each cell by its share of that row, so a busy row and a sparse
+        // row are both readable.
+        var rows = labels.map(function (rowLabel) {
+          var rowTotal = labels.reduce(function (sum, c) { return sum + confusion[rowLabel][c]; }, 0);
+          var cells = labels.map(function (colLabel) {
+            var value = confusion[rowLabel][colLabel];
+            var isDiag = rowLabel === colLabel;
+            var share = rowTotal ? value / rowTotal : 0;
+            var cell = el('td', {
+              class: 'cell' + (isDiag ? ' diag' : '') + (value === 0 ? ' zero' : ''),
+              text: String(value)
+            });
+            if (value > 0) {
+              var alpha = 0.12 + share * 0.55;
+              cell.style.background = isDiag
+                ? 'rgba(36, 95, 92, ' + alpha.toFixed(2) + ')'
+                : 'rgba(151, 64, 44, ' + alpha.toFixed(2) + ')';
+              if (share > 0.55) cell.style.color = '#fff';
+            }
+            return cell;
+          });
+          return el('tr', {}, [el('th', { class: 'rowhead', text: shortLabel(rowLabel) })].concat(cells));
+        });
+
+        return el('div', { class: 'panel' }, [
+          el('h3', { style: 'margin-top:0', text: title }),
+          el('div', { class: 'scroll' }, [
+            el('table', { class: 'cm' }, [
+              el('thead', {}, [head]),
+              el('tbody', {}, rows)
+            ])
+          ]),
+          el('p', { class: 'legend', text: caption })
+        ]);
+      }
+
+      /* --------------------------------------------------- per-class table */
+
+      function perClassTable(report) {
+        var rows = report.primarySignal.perClass.map(function (row) {
+          return el('tr', {}, [
+            el('td', { text: shortLabel(row.label) }),
+            el('td', { class: 'num', text: String(row.support) }),
+            el('td', { class: 'num', text: String(row.tp) }),
+            el('td', { class: 'num', text: String(row.fp) }),
+            el('td', { class: 'num', text: String(row.fn) }),
+            el('td', { class: 'num', text: pct(row.precision) }),
+            el('td', { class: 'num', text: pct(row.recall) }),
+            el('td', { class: 'num', text: pct(row.f1) })
+          ]);
+        });
+
+        rows.push(el('tr', { class: 'total' }, [
+          el('td', { text: 'macro average' }),
+          el('td', { class: 'num', text: String(report.primarySignal.n) }),
+          el('td', { class: 'num', text: '' }),
+          el('td', { class: 'num', text: '' }),
+          el('td', { class: 'num', text: '' }),
+          el('td', { class: 'num', text: pct(report.primarySignal.macroPrecision) }),
+          el('td', { class: 'num', text: pct(report.primarySignal.macroRecall) }),
+          el('td', { class: 'num', text: pct(report.primarySignal.macroF1) })
+        ]));
+
+        return el('div', { class: 'panel' }, [
+          el('h3', { style: 'margin-top:0', text: 'Per-class performance, primary signal' }),
+          el('div', { class: 'scroll' }, [
+            el('table', {}, [
+              el('thead', {}, [el('tr', {}, [
+                el('th', { text: 'Signal' }),
+                el('th', { class: 'num', text: 'Support' }),
+                el('th', { class: 'num', text: 'TP' }),
+                el('th', { class: 'num', text: 'FP' }),
+                el('th', { class: 'num', text: 'FN' }),
+                el('th', { class: 'num', text: 'Precision' }),
+                el('th', { class: 'num', text: 'Recall' }),
+                el('th', { class: 'num', text: 'F1' })
+              ])]),
+              el('tbody', {}, rows)
+            ])
+          ]),
+          el('p', { class: 'legend', text: 'Support is how many cases carry that label. Classes with three or four supporting cases have wide error bars; treat their precision and recall as directional only.' })
+        ]);
+      }
+
+      /* ------------------------------------------------------- failures */
+
+      function failureTable(report) {
+        var misses = report.perCase.filter(function (c) {
+          return c.expectedPrimary && !c.correct;
+        });
+        var safetyMisses = report.perCase.filter(function (c) {
+          return c.expectedSafety !== c.predictedSafety;
+        });
+
+        if (!misses.length && !safetyMisses.length) {
+          return el('div', { class: 'panel' }, [
+            el('h3', { style: 'margin-top:0', text: 'Every case matched its label' }),
+            el('p', { class: 'note', text: 'No signal or safety disagreements in this run.' })
+          ]);
+        }
+
+        var children = [el('h3', { style: 'margin-top:0', text: 'Where it disagreed with the label' })];
+
+        if (misses.length) {
+          children.push(el('div', { class: 'scroll' }, [
+            el('table', {}, [
+              el('thead', {}, [el('tr', {}, [
+                el('th', { text: 'Case' }),
+                el('th', { text: 'Expected' }),
+                el('th', { text: 'Predicted' }),
+                el('th', { text: 'Text' })
+              ])]),
+              el('tbody', {}, misses.map(function (c) {
+                return el('tr', {}, [
+                  el('td', { text: c.id }),
+                  el('td', { text: shortLabel(c.expectedPrimary) }),
+                  el('td', { text: shortLabel(c.predictedPrimary) }),
+                  el('td', { style: 'white-space:normal;max-width:34rem', text: c.text })
+                ]);
+              }))
+            ])
+          ]));
+        }
+
+        if (safetyMisses.length) {
+          children.push(el('h3', { text: 'Safety disagreements' }));
+          children.push(el('div', { class: 'scroll' }, [
+            el('table', {}, [
+              el('thead', {}, [el('tr', {}, [
+                el('th', { text: 'Case' }),
+                el('th', { text: 'Expected' }),
+                el('th', { text: 'Predicted' }),
+                el('th', { text: 'Text' })
+              ])]),
+              el('tbody', {}, safetyMisses.map(function (c) {
+                return el('tr', {}, [
+                  el('td', { text: c.id }),
+                  el('td', { text: c.expectedSafety }),
+                  el('td', { text: c.predictedSafety }),
+                  el('td', { style: 'white-space:normal;max-width:34rem', text: c.text })
+                ]);
+              }))
+            ])
+          ]));
+        }
+
+        children.push(el('p', { class: 'legend', text: 'Listed in full rather than summarised. A failure list you can read is worth more than an accuracy figure you cannot interrogate.' }));
+        return el('div', { class: 'panel panel--flag' }, children);
+      }
+
+      /* -------------------------------------------------------- ablation */
+
+      function deltaCell(before, after, higherIsBetter) {
+        if (before === null || after === null || before === undefined || after === undefined) {
+          return el('td', { class: 'num delta-flat', text: 'n/a' });
+        }
+        var diff = (after - before) * 100;
+        var cls = Math.abs(diff) < 0.05 ? 'delta-flat' : (diff > 0) === !!higherIsBetter ? 'delta-up' : 'delta-down';
+        var sign = diff > 0 ? '+' : '';
+        return el('td', { class: 'num ' + cls, text: sign + diff.toFixed(1) + ' pts' });
+      }
+
+      function ablationTable(rules, blended) {
+        function row(label, get, higherIsBetter) {
+          var a = get(rules);
+          var b = get(blended);
+          return el('tr', {}, [
+            el('td', { text: label }),
+            el('td', { class: 'num', text: pct(a) }),
+            el('td', { class: 'num', text: pct(b) }),
+            deltaCell(a, b, higherIsBetter !== false)
+          ]);
+        }
+
+        return el('div', { class: 'panel' }, [
+          el('h3', { style: 'margin-top:0', text: 'Ablation: rule engine alone vs blended with the on-device model' }),
+          el('p', { class: 'note', text: 'Same ' + rules.caseCount + ' cases (' + rules.datasetLabel + '), run twice. This is the measurement that decides whether the model is worth its download.' }),
+          el('div', { class: 'scroll' }, [
+            el('table', {}, [
+              el('thead', {}, [el('tr', {}, [
+                el('th', { text: 'Metric' }),
+                el('th', { class: 'num', text: 'Rules only' }),
+                el('th', { class: 'num', text: 'Blended' }),
+                el('th', { class: 'num', text: 'Change' })
+              ])]),
+              el('tbody', {}, [
+                row('Primary signal accuracy', function (r) { return r.primarySignal.accuracy; }),
+                row('Macro F1', function (r) { return r.primarySignal.macroF1; }),
+                row('Weighted F1', function (r) { return r.primarySignal.weightedF1; }),
+                row('Secondary signal recall', function (r) { return r.secondarySignals.recall; }),
+                row('Pressure band, exact', function (r) { return r.pressureBand.accuracy; }),
+                row('Pressure band, within one', function (r) { return r.pressureBand.withinOneBand; }),
+                row('Safety accuracy', function (r) { return r.safety.accuracy; })
+              ])
+            ])
+          ]),
+          el('p', { class: 'legend', text: 'Latency: ' + (rules.latency ? rules.latency.meanMs.toFixed(1) : '?') + ' ms rules, ' + (blended.latency ? blended.latency.meanMs.toFixed(1) : '?') + ' ms blended, mean per case. Safety is deterministic and has no model dependency, so it is expected to be identical in both columns; a difference there would indicate a bug.' })
+        ]);
+      }
+
+      /* ------------------------------------------------------- rendering */
+
+      function renderDashboard(report) {
+        dashboardNode.appendChild(headlineCards(report));
+        dashboardNode.appendChild(perClassTable(report));
+        dashboardNode.appendChild(confusionTable(
+          'Confusion matrix, primary stress signal',
+          report.primarySignal.confusion, report.primarySignal.labels,
+          'Rows are the assigned label, columns are the prediction. Teal on the diagonal is agreement; rust off it is a confusion, shaded by how much of that row it accounts for.'
+        ));
+        dashboardNode.appendChild(confusionTable(
+          'Confusion matrix, pressure band',
+          report.pressureBand.confusion, report.pressureBand.labels,
+          'Off-diagonal cells adjacent to the diagonal are within-one-band errors, which the plan tolerates. Cells two or more bands away are the ones that would change which exercise is recommended.'
+        ));
+        dashboardNode.appendChild(confusionTable(
+          'Confusion matrix, safety level',
+          report.safety.confusion, report.safety.labels,
+          'The consequential cell is the bottom-left: a case labelled crisis that was predicted none. The scan is deliberately tuned to prefer the opposite error.'
+        ));
+        dashboardNode.appendChild(failureTable(report));
+      }
+
+      /* --------------------------------------------------------- actions */
 
       document.getElementById('run-tests').addEventListener('click', function () {
         clearOutput();
@@ -133,56 +510,78 @@
         var groups = {};
         FB.testHarness.run(function (result) {
           if (!groups[result.suite]) {
-            var section = document.createElement('section');
-            section.className = 'suite';
-            var heading = document.createElement('h3');
-            heading.textContent = result.suite;
-            var list = document.createElement('ul');
-            section.appendChild(heading);
+            var section = el('section', { class: 'suite' }, [el('h3', { text: result.suite })]);
+            var list = el('ul', { class: 'tests' }, []);
             section.appendChild(list);
             resultsNode.appendChild(section);
             groups[result.suite] = list;
           }
-          var item = document.createElement('li');
-          item.className = result.passed ? 'pass' : 'fail';
-          item.textContent = result.label;
-          if (!result.passed) {
-            var err = document.createElement('span');
-            err.className = 'err';
-            err.textContent = result.error;
-            item.appendChild(err);
-          }
+          var item = el('li', { class: result.passed ? 'pass' : 'fail', text: result.label });
+          if (!result.passed) item.appendChild(el('span', { class: 'err', text: result.error }));
           groups[result.suite].appendChild(item);
         }).then(function (summary) {
-          var box = document.createElement('div');
-          box.className = 'summary ' + (summary.failed ? 'fail' : 'pass');
-          box.textContent = summary.passed + ' passed, ' + summary.failed + ' failed, ' + summary.total + ' total';
-          summaryNode.appendChild(box);
+          summaryNode.appendChild(el('div', {
+            class: 'summary ' + (summary.failed ? 'fail' : 'pass'),
+            text: summary.passed + ' passed, ' + summary.failed + ' failed, ' + summary.total + ' total'
+          }));
           setStatus(summary.failed ? 'Finished with failures.' : 'All tests passed.');
         });
       });
 
       function runEvaluation(mode) {
         clearOutput();
-        setStatus('Evaluating in ' + mode + ' mode...');
+        var dataset = datasetSelect.value;
+        setStatus('Evaluating the ' + FB.evaluate.datasetLabel(dataset) + ' in ' + mode + ' mode...');
 
-        FB.evaluate.run({
+        return FB.evaluate.run({
           mode: mode,
+          dataset: dataset,
           onProgress: function (done, total) { setStatus('Evaluating ' + done + ' of ' + total + '...'); }
         }).then(function (report) {
+          renderDashboard(report);
           lastReportText = FB.evaluate.format(report);
-          var pre = document.createElement('pre');
-          pre.textContent = lastReportText;
-          reportNode.appendChild(pre);
+          reportNode.appendChild(el('h2', { text: 'Plain text report' }));
+          reportNode.appendChild(el('pre', { text: lastReportText }));
           copyBtn.disabled = false;
           setStatus('Evaluation finished.');
+          return report;
         }).catch(function (err) {
           setStatus('Evaluation failed: ' + err.message);
         });
       }
 
-      document.getElementById('run-eval').addEventListener('click', function () { runEvaluation('rules'); });
-      document.getElementById('run-eval-blended').addEventListener('click', function () { runEvaluation('blended'); });
+      document.getElementById('run-eval').addEventListener('click', function () {
+        runEvaluation(FB.model.semanticReady() ? 'blended' : 'rules');
+      });
+
+      document.getElementById('run-ablation').addEventListener('click', function () {
+        clearOutput();
+        var dataset = datasetSelect.value;
+        var label = FB.evaluate.datasetLabel(dataset);
+        setStatus('Ablation: running the ' + label + ' with rules only...');
+
+        FB.evaluate.run({ mode: 'rules', dataset: dataset }).then(function (rules) {
+          setStatus('Ablation: running the ' + label + ' blended with the on-device model...');
+          return FB.evaluate.run({ mode: 'blended', dataset: dataset }).then(function (blended) {
+            dashboardNode.appendChild(ablationTable(rules, blended));
+            dashboardNode.appendChild(headlineCards(blended));
+            dashboardNode.appendChild(perClassTable(blended));
+            dashboardNode.appendChild(confusionTable(
+              'Confusion matrix, primary signal, blended',
+              blended.primarySignal.confusion, blended.primarySignal.labels,
+              'Blended run. Compare against the rules-only matrix by re-running the evaluation in rules mode.'
+            ));
+            dashboardNode.appendChild(failureTable(blended));
+            lastReportText = 'RULES ONLY\n\n' + FB.evaluate.format(rules) + '\n\nBLENDED\n\n' + FB.evaluate.format(blended);
+            reportNode.appendChild(el('h2', { text: 'Plain text report, both runs' }));
+            reportNode.appendChild(el('pre', { text: lastReportText }));
+            copyBtn.disabled = false;
+            setStatus('Ablation finished.');
+          });
+        }).catch(function (err) {
+          setStatus('Ablation failed: ' + err.message);
+        });
+      });
 
       document.getElementById('load-model').addEventListener('click', function () {
         setStatus('Loading the on-device model...');
@@ -191,8 +590,8 @@
         });
         FB.model.load().then(function (state) {
           if (FB.model.semanticReady()) {
-            document.getElementById('run-eval-blended').disabled = false;
-            setStatus('Model ready (' + state.modelId + '). Blended evaluation is now available.');
+            document.getElementById('run-ablation').disabled = false;
+            setStatus('Model ready (' + state.modelId + '). Evaluation now runs blended, and the ablation is available.');
           } else {
             setStatus('The model could not load: ' + (state.error || 'unknown reason') + '. Rule-engine evaluation still works.');
           }

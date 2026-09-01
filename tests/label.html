@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Free Bird blind labelling</title>
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f7f6f2; --surface: #fffefb; --ink: #191d1c; --mute: #6b7370; --line: #e3e0d7;
+      --ok: #2f6b4f; --bad: #97402c; --accent: #245f5c; --accent-soft: #e8f0ee;
+      --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2.5rem 1.5rem 5rem; background: var(--bg); color: var(--ink);
+      font-family: var(--font); font-size: 15px; line-height: 1.6;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin: 0 0 .35rem; letter-spacing: -.02em; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+    .lede { color: var(--mute); margin: 0 0 1.5rem; }
+    .panel {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .quote {
+      font-size: 1.15rem; line-height: 1.55; margin: 0 0 1.25rem;
+      padding: 1rem 1.15rem; background: var(--accent-soft);
+      border-left: 3px solid var(--accent); border-radius: 4px;
+    }
+    fieldset { border: none; margin: 0 0 1.25rem; padding: 0; }
+    legend { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); padding: 0 0 .5rem; }
+    .opts { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .opt { position: relative; }
+    .opt input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    .opt span {
+      display: block; padding: .4rem .7rem; border: 1px solid #cfcbbf;
+      border-radius: 999px; font-size: .85rem; background: #fff; cursor: pointer;
+    }
+    .opt input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button {
+      padding: .55rem 1rem; min-height: 2.5rem; background: #fff;
+      border: 1px solid #cfcbbf; border-radius: 5px; font: inherit; font-size: .9rem;
+      cursor: pointer; color: var(--ink);
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+    .progress { font-size: .8rem; color: var(--mute); font-variant-numeric: tabular-nums; }
+    .track { height: 4px; background: #e8e5dc; border-radius: 2px; margin: .5rem 0 1.25rem; }
+    .fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .2s; }
+    table { border-collapse: collapse; width: 100%; font-size: .85rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: .4rem .5rem; text-align: left; border-bottom: 1px solid var(--line); }
+    td.num, th.num { text-align: right; }
+    .kappa { font-size: 2rem; font-weight: 600; letter-spacing: -.02em; }
+    .note { font-size: .8rem; color: var(--mute); }
+    .hidden { display: none; }
+    a { color: var(--accent); }
+    pre { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1rem; overflow-x: auto; font-family: var(--mono); font-size: .72rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Blind labelling</h1>
+    <p class="lede">
+      Both Free Bird evaluation sets were labelled by the project author, which
+      is a real methodological weakness: it shows the system behaves as its
+      designer intends, not that the designer reads text the way anyone else
+      does. This tool closes that gap. You will see each case with no label and
+      no prediction, and at the end it reports how often you agreed with the
+      stored label, corrected for chance.
+    </p>
+
+    <div class="panel" id="intro">
+      <h2 style="margin-top:0">Before you start</h2>
+      <p class="note">
+        There are no right answers here and you are not being tested. Pick the
+        one thing that seems to be <em>most</em> weighing on the person. If two
+        fit, pick the one you would mention first if you were describing the
+        message to a friend.
+      </p>
+      <p class="note">
+        It takes about ten minutes. Your answers stay in this browser under the
+        key <code>freebird.labelling</code> and are never sent anywhere.
+      </p>
+      <div class="row">
+        <label class="note" for="which">Set</label>
+        <select id="which" style="font:inherit;font-size:.85rem;padding:.35rem .5rem;border:1px solid #cfcbbf;border-radius:5px;">
+          <option value="holdout">Held-out set (48 cases)</option>
+          <option value="dev">Development set (48 cases)</option>
+        </select>
+        <button class="primary" id="start" type="button">Start labelling</button>
+        <button id="resume" type="button" class="hidden">Resume</button>
+        <button id="reset" type="button">Clear my answers</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="task">
+      <div class="progress" id="progress"></div>
+      <div class="track"><div class="fill" id="fill" style="width:0%"></div></div>
+
+      <blockquote class="quote" id="case-text"></blockquote>
+
+      <fieldset>
+        <legend>What is mostly weighing on this person?</legend>
+        <div class="opts" id="signal-opts"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Does this need more than a study plan?</legend>
+        <div class="opts" id="safety-opts"></div>
+      </fieldset>
+
+      <div class="row">
+        <button class="primary" id="next" type="button" disabled>Next</button>
+        <button id="skip" type="button">Not sure, skip</button>
+        <span class="note" id="hint"></span>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="results"></div>
+
+    <h2>How agreement is scored</h2>
+    <p class="note">
+      Raw agreement is misleading on its own, because two people picking at
+      random from ten options would still agree sometimes. <strong>Cohen's
+      kappa</strong> corrects for that: it measures agreement above what chance
+      alone would produce. 1.0 is perfect, 0 is chance, and below 0 is worse
+      than chance. The convention most people use is that 0.21 to 0.40 is fair,
+      0.41 to 0.60 is moderate, 0.61 to 0.80 is substantial, and above 0.80 is
+      almost perfect.
+    </p>
+    <p class="note">
+      A moderate kappa on a ten-class task about ambiguous emotional text is a
+      normal and reportable result, not a failure. If it comes out low, the
+      useful conclusion is that the label set itself is ambiguous, which is
+      worth knowing and worth saying.
+    </p>
+    <p class="note"><a href="index.html">Back to the evaluation page</a></p>
+  </div>
+
+  <script src="../ai/normalize.js"></script>
+  <script src="../data/exercises.js"></script>
+  <script src="../ai/classifier.js"></script>
+  <script src="../data/evaluation-data.js"></script>
+  <script src="../data/evaluation-holdout.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var FB = window.FB;
+      var KEY = 'freebird.labelling';
+
+      var SIGNALS = FB.classifier.SIGNALS.map(function (s) { return { id: s.id, label: s.label }; });
+      var SAFETY = [
+        { id: 'none', label: 'No, ordinary stress' },
+        { id: 'concern', label: 'Maybe, worth a gentle note' },
+        { id: 'crisis', label: 'Yes, this needs real support' }
+      ];
+
+      var cases = [];
+      var index = 0;
+      var answers = {};
+      var picked = { signal: null, safety: null };
+
+      var $ = function (id) { return document.getElementById(id); };
+
+      function load() {
+        try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+      }
+      function save() {
+        try { localStorage.setItem(KEY, JSON.stringify(answers)); } catch (e) { /* private mode */ }
+      }
+
+      function setFor(which) {
+        return which === 'dev' ? FB.evaluationData.CASES : FB.evaluationHoldout.CASES;
+      }
+
+      function renderOptions() {
+        var sig = $('signal-opts');
+        sig.innerHTML = '';
+        SIGNALS.forEach(function (s) {
+          var wrap = document.createElement('label');
+          wrap.className = 'opt';
+          var input = document.createElement('input');
+          input.type = 'radio'; input.name = 'signal'; input.value = s.id;
+          var span = document.createElement('span');
+          span.textContent = s.label;
+          input.addEventListener('change', function () { picked.signal = s.id; updateNext(); });
+          wrap.appendChild(input); wrap.appendChild(span);
+          sig.appendChild(wrap);
+        });
+
+        var saf = $('safety-opts');
+        saf.innerHTML = '';
+        SAFETY.forEach(function (s) {
+          var wrap = document.createElement('label');
+          wrap.className = 'opt';
+          var input = document.createElement('input');
+          input.type = 'radio'; input.name = 'safety'; input.value = s.id;
+          var span = document.createElement('span');
+          span.textContent = s.label;
+          input.addEventListener('change', function () { picked.safety = s.id; updateNext(); });
+          wrap.appendChild(input); wrap.appendChild(span);
+          saf.appendChild(wrap);
+        });
+      }
+
+      function updateNext() {
+        $('next').disabled = !(picked.signal && picked.safety);
+        $('hint').textContent = $('next').disabled ? 'Pick one from each group.' : '';
+      }
+
+      function show() {
+        if (index >= cases.length) { finish(); return; }
+        var c = cases[index];
+        $('case-text').textContent = c.text;
+        $('progress').textContent = 'Case ' + (index + 1) + ' of ' + cases.length;
+        $('fill').style.width = ((index / cases.length) * 100) + '%';
+        picked = { signal: null, safety: null };
+        Array.prototype.forEach.call(document.querySelectorAll('input[type=radio]'), function (r) { r.checked = false; });
+        updateNext();
+        window.scrollTo(0, 0);
+      }
+
+      function record(skipped) {
+        var c = cases[index];
+        answers[c.id] = skipped ? { skipped: true } : { signal: picked.signal, safety: picked.safety };
+        save();
+        index++;
+        show();
+      }
+
+      /* ------------------------------------------------------- scoring */
+
+      /**
+       * Cohen's kappa. Chance agreement is estimated from the two annotators'
+       * own marginal distributions, which is what separates it from raw
+       * agreement on a task with ten unevenly used classes.
+       */
+      function cohensKappa(pairs) {
+        if (!pairs.length) return null;
+        var n = pairs.length;
+        var agree = 0;
+        var rowCounts = {};
+        var colCounts = {};
+
+        pairs.forEach(function (p) {
+          if (p.a === p.b) agree++;
+          rowCounts[p.a] = (rowCounts[p.a] || 0) + 1;
+          colCounts[p.b] = (colCounts[p.b] || 0) + 1;
+        });
+
+        var po = agree / n;
+        var pe = 0;
+        Object.keys(rowCounts).forEach(function (k) {
+          if (colCounts[k]) pe += (rowCounts[k] / n) * (colCounts[k] / n);
+        });
+
+        if (pe === 1) return null;
+        return { po: po, pe: pe, kappa: (po - pe) / (1 - pe), n: n, agreed: agree };
+      }
+
+      function interpret(k) {
+        if (k === null || k === undefined) return 'not computable';
+        if (k < 0) return 'worse than chance';
+        if (k <= 0.20) return 'slight';
+        if (k <= 0.40) return 'fair';
+        if (k <= 0.60) return 'moderate';
+        if (k <= 0.80) return 'substantial';
+        return 'almost perfect';
+      }
+
+      function finish() {
+        $('task').classList.add('hidden');
+        var host = $('results');
+        host.classList.remove('hidden');
+        host.innerHTML = '';
+
+        var signalPairs = [];
+        var safetyPairs = [];
+        var disagreements = [];
+        var skipped = 0;
+
+        cases.forEach(function (c) {
+          var a = answers[c.id];
+          if (!a || a.skipped) { skipped++; return; }
+          if (c.expectedPrimary) {
+            signalPairs.push({ a: c.expectedPrimary, b: a.signal });
+            if (c.expectedPrimary !== a.signal) {
+              disagreements.push({ id: c.id, text: c.text, stored: c.expectedPrimary, yours: a.signal });
+            }
+          }
+          safetyPairs.push({ a: c.expectedSafety, b: a.safety });
+        });
+
+        var sk = cohensKappa(signalPairs);
+        var fk = cohensKappa(safetyPairs);
+
+        function block(title, k, note) {
+          var d = document.createElement('div');
+          d.style.marginBottom = '1.5rem';
+          var h = document.createElement('h2');
+          h.style.marginTop = '0';
+          h.textContent = title;
+          d.appendChild(h);
+          if (!k) {
+            var p = document.createElement('p');
+            p.className = 'note';
+            p.textContent = 'Not enough answers to score.';
+            d.appendChild(p);
+            return d;
+          }
+          var big = document.createElement('div');
+          big.className = 'kappa';
+          big.textContent = 'kappa ' + k.kappa.toFixed(2) + ' (' + interpret(k.kappa) + ')';
+          d.appendChild(big);
+          var sub = document.createElement('p');
+          sub.className = 'note';
+          sub.textContent = 'Raw agreement ' + (k.po * 100).toFixed(1) + '% (' + k.agreed + ' of ' + k.n +
+            '), chance agreement ' + (k.pe * 100).toFixed(1) + '%. ' + (note || '');
+          d.appendChild(sub);
+          return d;
+        }
+
+        host.appendChild(block('Primary signal agreement', sk,
+          'Ten classes, so chance agreement is low and kappa is close to raw agreement.'));
+        host.appendChild(block('Safety level agreement', fk,
+          'Three classes and a very uneven distribution, so chance agreement is high and kappa is the honest number here.'));
+
+        if (skipped) {
+          var s = document.createElement('p');
+          s.className = 'note';
+          s.textContent = skipped + ' case' + (skipped === 1 ? '' : 's') + ' skipped and excluded from scoring.';
+          host.appendChild(s);
+        }
+
+        if (disagreements.length) {
+          var h3 = document.createElement('h2');
+          h3.textContent = 'Where you disagreed with the stored label';
+          host.appendChild(h3);
+          var note = document.createElement('p');
+          note.className = 'note';
+          note.textContent = 'These are the cases worth arguing about. A disagreement usually means the case is genuinely ambiguous, which is a finding about the label set rather than about either person.';
+          host.appendChild(note);
+
+          var table = document.createElement('table');
+          table.innerHTML = '<thead><tr><th>Case</th><th>Stored</th><th>You said</th><th>Text</th></tr></thead>';
+          var tb = document.createElement('tbody');
+          disagreements.forEach(function (d) {
+            var tr = document.createElement('tr');
+            [d.id, d.stored.replace(/-/g, ' '), d.yours.replace(/-/g, ' '), d.text].forEach(function (v) {
+              var td = document.createElement('td');
+              td.textContent = v;
+              tr.appendChild(td);
+            });
+            tb.appendChild(tr);
+          });
+          table.appendChild(tb);
+          host.appendChild(table);
+        }
+
+        var h4 = document.createElement('h2');
+        h4.textContent = 'Copy this into the write-up';
+        host.appendChild(h4);
+        var pre = document.createElement('pre');
+        pre.textContent =
+          'Inter-rater agreement, second annotator, ' + (($('which').value === 'dev') ? 'development' : 'held-out') + ' set\n' +
+          'Generated ' + new Date().toISOString() + '\n\n' +
+          'Primary signal:  kappa ' + (sk ? sk.kappa.toFixed(3) : 'n/a') +
+            '  raw ' + (sk ? (sk.po * 100).toFixed(1) + '%' : 'n/a') + '  n=' + (sk ? sk.n : 0) + '\n' +
+          'Safety level:    kappa ' + (fk ? fk.kappa.toFixed(3) : 'n/a') +
+            '  raw ' + (fk ? (fk.po * 100).toFixed(1) + '%' : 'n/a') + '  n=' + (fk ? fk.n : 0) + '\n' +
+          'Skipped: ' + skipped + '\n';
+        host.appendChild(pre);
+
+        var again = document.createElement('button');
+        again.textContent = 'Label the other set';
+        again.addEventListener('click', function () {
+          host.classList.add('hidden');
+          $('intro').classList.remove('hidden');
+        });
+        host.appendChild(again);
+      }
+
+      /* -------------------------------------------------------- wiring */
+
+      renderOptions();
+      answers = load();
+
+      $('start').addEventListener('click', function () {
+        cases = setFor($('which').value);
+        // Resume where they left off rather than restarting from the top.
+        index = 0;
+        while (index < cases.length && answers[cases[index].id]) index++;
+        $('intro').classList.add('hidden');
+        $('results').classList.add('hidden');
+        $('task').classList.remove('hidden');
+        show();
+      });
+
+      $('next').addEventListener('click', function () { record(false); });
+      $('skip').addEventListener('click', function () { record(true); });
+
+      $('reset').addEventListener('click', function () {
+        answers = {};
+        try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+        $('results').classList.add('hidden');
+        alert('Answers cleared.');
+      });
+    })();
+  </script>
+</body>
+</html>
