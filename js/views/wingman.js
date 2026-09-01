@@ -92,8 +92,14 @@
       listNode.scrollTop = listNode.scrollHeight;
 
       var turn = FB.state.get().chat.turn;
+      // What Wingman has already said this conversation. The composer uses it
+      // to avoid handing back a reply the user is still looking at.
+      var recent = FB.state.get().chat.messages
+        .filter(function (m) { return m.role === 'wingman'; })
+        .slice(-4)
+        .map(function (m) { return m.text; });
 
-      FB.pipeline.respond(text, FB.wingmanContext.build(), turn)
+      FB.pipeline.respond(text, FB.wingmanContext.build(), turn, { recent: recent })
         .then(function (reply) {
           if (reply.blocked) {
             FB.state.setSafetyBlock(reply.safety);
@@ -144,10 +150,12 @@
       ])
     ]);
 
+    // Chosen for where this session actually is, so someone who has finished
+    // the plan is not offered "help me break this down" again.
     var suggestions = el('div', { class: 'chat__suggestions' }, [
       el('p', { class: 'chat__suggestions-label', id: 'suggestion-label', text: 'Or start with one of these' }),
       el('ul', { class: 'chat__suggestion-list', 'aria-labelledby': 'suggestion-label' },
-        FB.fallback.SUGGESTED_PROMPTS.map(function (prompt) {
+        FB.fallback.suggestionsFor(ctx).map(function (prompt) {
           return el('li', {}, el('button', {
             class: 'suggestion', type: 'button',
             onclick: function () { submit(prompt); }
